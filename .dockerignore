@@ -1,0 +1,15 @@
+.git
+.gitignore
+*.md
+LICENSE
+.env
+.env.*
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+pybridge/whatsapp_bridge/node_modules
+pybridge/__pycache__
+pybridge/plugins/__pycache__
+pybridge/channels/__pycache__
+pybridge/engine/__pycache__

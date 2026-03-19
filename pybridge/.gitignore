@@ -1,0 +1,6 @@
+.env
+whatsapp_bridge/.wwebjs_auth/
+whatsapp_bridge/node_modules/
+__pycache__/
+*.pyc
+~/.pybridge/

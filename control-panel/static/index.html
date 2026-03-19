@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>openAIConnect — Control Panel</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f1117;
+  --bg-card:   #181b24;
+  --bg-hover:  #1e2230;
+  --border:    #2a2e3b;
+  --text:      #e1e4eb;
+  --text-dim:  #8b90a0;
+  --accent:    #6c8cff;
+  --accent-dim:#4a64c4;
+  --green:     #4ade80;
+  --red:       #f87171;
+  --orange:    #fbbf24;
+  --purple:    #a78bfa;
+  --cyan:      #22d3ee;
+  --radius:    10px;
+  --sidebar-w: 240px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+}
+
+a { color: var(--accent); text-decoration: none; }
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 10;
+}
+.sidebar-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-brand h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.sidebar-brand h1 span { color: var(--accent); }
+.sidebar-brand p { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.sidebar-nav { flex: 1; padding: 12px 10px; overflow-y: auto; }
+.nav-section {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-dim); padding: 16px 10px 6px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  font-size: 13px; color: var(--text-dim); transition: all 0.15s;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.nav-item.active { background: var(--accent-dim); color: #fff; }
+.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-footer {
+  padding: 16px 20px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-dim);
+}
+
+/* Main */
+.main { margin-left: var(--sidebar-w); flex: 1; padding: 32px 40px; max-width: 1200px; }
+.page-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.page-subtitle { font-size: 13px; color: var(--text-dim); margin-bottom: 28px; }
+
+/* Grid */
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+/* Card */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-title { font-size: 14px; font-weight: 600; }
+
+/* Stats */
+.stat-card { display: flex; align-items: center; gap: 14px; }
+.stat-icon {
+  width: 42px; height: 42px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.stat-icon svg { width: 22px; height: 22px; }
+.stat-icon.blue  { background: rgba(108,140,255,0.15); color: var(--accent); }
+.stat-icon.green { background: rgba(74,222,128,0.15); color: var(--green); }
+.stat-icon.purple { background: rgba(167,139,250,0.15); color: var(--purple); }
+.stat-icon.cyan  { background: rgba(34,211,238,0.15); color: var(--cyan); }
+.stat-icon.orange { background: rgba(251,191,36,0.15); color: var(--orange); }
+.stat-info h3 { font-size: 22px; font-weight: 700; }
+.stat-info p { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+/* Badges */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+}
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
+.badge.running { background: rgba(74,222,128,0.12); color: var(--green); }
+.badge.running::before { background: var(--green); }
+.badge.stopped { background: rgba(248,113,113,0.12); color: var(--red); }
+.badge.stopped::before { background: var(--red); }
+.badge.enabled { background: rgba(74,222,128,0.12); color: var(--green); }
+.badge.enabled::before { background: var(--green); }
+.badge.disabled { background: rgba(139,144,160,0.12); color: var(--text-dim); }
+.badge.disabled::before { background: var(--text-dim); }
+
+/* Toggle */
+.toggle { position: relative; width: 40px; height: 22px; cursor: pointer; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider {
+  position: absolute; inset: 0; background: var(--border);
+  border-radius: 22px; transition: 0.2s;
+}
+.toggle .slider::before {
+  content: ""; position: absolute; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: 0.2s;
+}
+.toggle input:checked + .slider { background: var(--accent); }
+.toggle input:checked + .slider::before { transform: translateX(18px); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-dim); padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg-hover); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: 0.15s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dim); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { background: var(--bg-hover); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+
+/* Forms */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-dim); margin-bottom: 6px; }
+.form-input, .form-select {
+  width: 100%; padding: 9px 12px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-size: 13px; outline: none; transition: 0.15s;
+}
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,140,255,0.15);
+}
+
+/* Pages */
+.page { display: none; }
+.page.active { display: block; }
+
+/* Channel cards */
+.channel-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+}
+.channel-info { display: flex; align-items: center; gap: 14px; }
+.channel-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.channel-name { font-weight: 600; font-size: 14px; }
+.channel-detail { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* Tags */
+.tag {
+  display: inline-block; padding: 3px 8px; border-radius: 6px;
+  font-size: 11px; background: var(--bg-hover); color: var(--text-dim); margin: 2px;
+}
+.tag.active { background: rgba(108,140,255,0.15); color: var(--accent); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  padding: 12px 20px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 10px; font-size: 13px; z-index: 999;
+  transform: translateY(80px); opacity: 0; transition: all 0.3s;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: var(--green); }
+.toast.error { border-color: var(--red); }
+
+/* Code block */
+pre.code-block {
+  background: var(--bg); padding: 14px; border-radius: 8px;
+  font-size: 12px; overflow-x: auto; color: var(--text-dim);
+  line-height: 1.7;
+}
+pre.code-block .prompt { color: var(--green); }
+pre.code-block .cmd { color: var(--accent); }
+pre.code-block .comment { color: #555; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { width: 60px; }
+  .sidebar-brand h1, .sidebar-brand p, .nav-section,
+  .nav-item span, .sidebar-footer { display: none; }
+  .nav-item { justify-content: center; padding: 12px; }
+  .main { margin-left: 60px; padding: 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1><span>Py</span>Bridge</h1>
+    <p>AI Remote Control Panel</p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" data-page="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Dashboard</span>
+    </div>
+
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item" data-page="channels">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span>Channels</span>
+    </div>
+    <div class="nav-item" data-page="models">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4m-2.93-7.07l-2.83 2.83m-8.48 8.48l-2.83 2.83m0-14.14l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
+      <span>Models</span>
+    </div>
+    <div class="nav-item" data-page="security">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      <span>Security</span>
+    </div>
+
+    <div class="nav-section">Components</div>
+    <div class="nav-item" data-page="plugins">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>
+      <span>Plugins</span>
+    </div>
+
+    <div class="nav-section">Help</div>
+    <div class="nav-item" data-page="quickstart">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3m.08 4h.01"/></svg>
+      <span>Quick Start</span>
+    </div>
+    <div class="nav-item" data-page="commands">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span>Commands</span>
+    </div>
+  </nav>
+  <div class="sidebar-footer">Open Source &middot; MIT License</div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Dashboard -->
+  <section class="page active" id="page-dashboard">
+    <h2 class="page-title">Dashboard</h2>
+    <p class="page-subtitle">PyBridge system overview</p>
+
+    <div class="grid grid-4" style="margin-bottom:24px;">
+      <div class="card stat-card">
+        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg></div>
+        <div class="stat-info"><h3 id="stat-models">3</h3><p>AI Models</p></div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+        <div class="stat-info"><h3 id="stat-channels">4</h3><p>Channels</p></div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg></div>
+        <div class="stat-info"><h3 id="stat-plugins">0</h3><p>Plugins</p></div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-icon cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+        <div class="stat-info"><h3 id="stat-active-ch">0</h3><p>Active Channels</p></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Service Status</span>
+          <button class="btn btn-outline btn-sm" onclick="refreshStatus()">Refresh</button>
+        </div>
+        <table>
+          <thead><tr><th>Service</th><th>Status</th></tr></thead>
+          <tbody id="status-table"><tr><td>Loading...</td><td></td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Config Health Check</span>
+          <button class="btn btn-outline btn-sm" onclick="refreshHealth()">Check</button>
+        </div>
+        <div id="health-list" style="display:flex;flex-direction:column;gap:8px;">
+          <span style="font-size:13px;color:var(--text-dim);">Loading...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:16px;">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Channels</span></div>
+        <table>
+          <thead><tr><th>Channel</th><th>Status</th></tr></thead>
+          <tbody id="channels-summary"><tr><td>Loading...</td><td></td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Models</span></div>
+        <table>
+          <thead><tr><th>Model</th><th>Provider</th><th>Default</th></tr></thead>
+          <tbody id="models-summary"><tr><td>Loading...</td><td></td><td></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header"><span class="card-title">Runtime Environment</span></div>
+      <div id="runtime-tags" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
+  </section>
+
+  <!-- Channels -->
+  <section class="page" id="page-channels">
+    <h2 class="page-title">Channels</h2>
+    <p class="page-subtitle">Manage messaging channels — toggle on/off to update config.json</p>
+    <div class="grid grid-2" id="channels-grid"></div>
+  </section>
+
+  <!-- Models -->
+  <section class="page" id="page-models">
+    <h2 class="page-title">AI Models</h2>
+    <p class="page-subtitle">Configure LLM providers and fallback chain</p>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span class="card-title">Default Model</span></div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <select class="form-select" id="default-model-select" style="max-width:200px;">
+          <option value="claude">Claude</option>
+          <option value="codex">Codex / OpenAI</option>
+          <option value="ollama">Ollama (Local)</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="setDefaultModel()">Save</button>
+      </div>
+    </div>
+    <div class="grid grid-3" id="models-grid"></div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header"><span class="card-title">Fallback Chain</span></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">
+        If the primary model fails, the system tries each model in order:
+      </p>
+      <div id="fallback-chain" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+  </section>
+
+  <!-- Security -->
+  <section class="page" id="page-security">
+    <h2 class="page-title">Security</h2>
+    <p class="page-subtitle">Rate limiting, message validation, and prompt injection protection</p>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px;">General Settings</div>
+        <div class="form-group">
+          <label class="form-label">Max Message Length</label>
+          <input class="form-input" id="sec-max-len" type="number" value="4000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rate Limit (requests/min)</label>
+          <input class="form-input" id="sec-rate-limit" type="number" value="20">
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+          <label class="toggle">
+            <input type="checkbox" id="sec-block-injection" checked>
+            <span class="slider"></span>
+          </label>
+          <span style="font-size:13px;">Block Prompt Injection</span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveSecurity()">Save Security Settings</button>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px;">Blocked Injection Patterns</div>
+        <div id="injection-patterns" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+        <div style="margin-top:14px;display:flex;gap:8px;">
+          <input class="form-input" id="new-pattern" placeholder="Add new pattern..." style="flex:1;">
+          <button class="btn btn-outline btn-sm" onclick="addPattern()">Add</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Plugins -->
+  <section class="page" id="page-plugins">
+    <h2 class="page-title">Plugins</h2>
+    <p class="page-subtitle">Built-in plugins that extend PyBridge capabilities</p>
+    <div class="grid grid-3" id="plugins-grid"></div>
+  </section>
+
+  <!-- Quick Start -->
+  <section class="page" id="page-quickstart">
+    <h2 class="page-title">Quick Start Guide</h2>
+    <p class="page-subtitle">Get PyBridge running in under 5 minutes</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:12px;">1. Install Dependencies</div>
+      <pre class="code-block"><span class="prompt">$</span> cd pybridge
+<span class="prompt">$</span> pip install -r requirements.txt</pre>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:12px;">2. Configure</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:12px;">
+        Create a <code style="color:var(--accent);">.env</code> file with your API keys, or edit <code style="color:var(--accent);">config.json</code> directly:
+      </p>
+      <pre class="code-block"><span class="comment"># pybridge/.env</span>
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+TELEGRAM_BOT_TOKEN=123456:ABC...
+HMAC_SECRET=your-random-secret</pre>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:12px;">3. Enable a Channel</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;">
+        Go to <a href="#" onclick="navigateTo('channels')">Channels</a> and enable at least one:<br><br>
+        <strong style="color:var(--text);">WhatsApp</strong> — Scan QR code (easiest, enabled by default)<br>
+        <strong style="color:var(--text);">Telegram</strong> — Create bot via @BotFather<br>
+        <strong style="color:var(--text);">Email</strong> — Gmail + App Password<br>
+        <strong style="color:var(--text);">iMessage</strong> — macOS only, grant Full Disk Access to Terminal
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">4. Run</div>
+      <pre class="code-block"><span class="prompt">$</span> python main.py
+<span class="comment"># or</span>
+<span class="prompt">$</span> ./start.sh</pre>
+      <p style="font-size:13px;color:var(--text-dim);margin-top:12px;">
+        Send messages from your phone and PyBridge will reply via AI.
+      </p>
+    </div>
+  </section>
+
+  <!-- Commands -->
+  <section class="page" id="page-commands">
+    <h2 class="page-title">Phone Commands</h2>
+    <p class="page-subtitle">Send these from your phone to control PyBridge</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">AI Control</div>
+        <table>
+          <tr><td style="color:var(--accent);font-family:monospace;">use claude</td><td>Switch to Claude</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">use codex</td><td>Switch to OpenAI</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">use ollama</td><td>Switch to local Ollama</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">model / models</td><td>Show current / list all</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">clear</td><td>Reset chat history</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Screen & Meetings</div>
+        <table>
+          <tr><td style="color:var(--accent);font-family:monospace;">ss / screenshot</td><td>Take screenshot</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">record 10</td><td>Record 10s video</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">stream / stopstream</td><td>Live screen stream</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">meet zoom</td><td>Start Zoom meeting</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">meet google</td><td>Start Google Meet</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Git & GitHub</div>
+        <table>
+          <tr><td style="color:var(--accent);font-family:monospace;">git status / log</td><td>Repo info</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">git pull / push</td><td>Sync</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">pr list / pr create</td><td>Pull requests</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">issues / issue 42</td><td>GitHub issues</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">System & Docker</div>
+        <table>
+          <tr><td style="color:var(--accent);font-family:monospace;">ps / cpu / mem / disk</td><td>System monitor</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">kill &lt;name&gt;</td><td>Kill process</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">docker ps / logs</td><td>Containers</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">compose up / down</td><td>Docker Compose</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Code & Files</div>
+        <table>
+          <tr><td style="color:var(--accent);font-family:monospace;">py &lt;code&gt;</td><td>Run Python</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">node / bash / sql</td><td>Run code</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">read &lt;file&gt;</td><td>View file</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">search &lt;pattern&gt;</td><td>Grep codebase</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">run &lt;cmd&gt;</td><td>Any terminal command</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Scheduler & Logs</div>
+        <table>
+          <tr><td style="color:var(--accent);font-family:monospace;">every 30m &lt;cmd&gt;</td><td>Recurring task</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">at 09:00 &lt;cmd&gt;</td><td>Daily at time</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">watch &lt;logfile&gt;</td><td>Watch + alert on errors</td></tr>
+          <tr><td style="color:var(--accent);font-family:monospace;">crons / cancel &lt;id&gt;</td><td>Manage scheduled tasks</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let config = {};
+let injectionPatterns = [];
+
+// Navigation
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => navigateTo(item.dataset.page));
+});
+function navigateTo(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${page}`)?.classList.add('active');
+}
+
+// API
+async function api(path, opts) {
+  try { return await (await fetch(path, opts)).json(); }
+  catch (e) { console.error(`API ${path}:`, e); return null; }
+}
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// Load all data
+async function loadAll() {
+  const [cfg, status, plugins, health] = await Promise.all([
+    api('/api/config'), api('/api/status'), api('/api/plugins'), api('/api/health'),
+  ]);
+
+  if (cfg) {
+    config = cfg;
+    renderChannelsSummary(cfg);
+    renderModelsSummary(cfg);
+    renderChannelsPage(cfg);
+    renderModelsPage(cfg);
+    renderSecurityPage(cfg);
+    document.getElementById('stat-models').textContent = Object.keys(cfg.models || {}).length;
+    const allCh = ['email','telegram','whatsapp','imessage'];
+    document.getElementById('stat-channels').textContent = allCh.length;
+    document.getElementById('stat-active-ch').textContent = allCh.filter(c => cfg[c]?.enabled).length;
+  }
+  if (status) renderStatus(status);
+  if (plugins) {
+    renderPlugins(plugins);
+    document.getElementById('stat-plugins').textContent = plugins.length;
+  }
+  if (health) renderHealth(health);
+}
+
+// Renderers
+function renderStatus(s) {
+  const services = [
+    ['PyBridge Daemon', s.pybridge],
+    ['Ollama (Local LLM)', s.ollama],
+    ['WhatsApp Bridge', s.whatsapp_bridge],
+  ];
+  document.getElementById('status-table').innerHTML = services.map(([name, val]) => {
+    const badge = val === 'running'
+      ? '<span class="badge running">Running</span>'
+      : '<span class="badge stopped">Stopped</span>';
+    return `<tr><td>${name}</td><td>${badge}</td></tr>`;
+  }).join('');
+
+  // Runtime tags
+  const runtimes = [
+    ['Python ' + (s.python || '?'), true],
+    ['Node.js', s.node],
+    ['Git', s.git],
+    ['Docker', s.docker],
+    ['ffmpeg', s.ffmpeg],
+  ];
+  document.getElementById('runtime-tags').innerHTML = runtimes.map(([name, ok]) =>
+    `<span class="tag ${ok ? 'active' : ''}">${ok ? '' : ''}${name}${ok ? '' : ' (missing)'}</span>`
+  ).join('');
+}
+
+function renderHealth(health) {
+  const icons = { ok: '\u2705', warn: '\u26A0\uFE0F', error: '\u274C', info: '\u2139\uFE0F' };
+  const colors = { ok: 'var(--green)', warn: 'var(--orange)', error: 'var(--red)', info: 'var(--accent)' };
+  document.getElementById('health-list').innerHTML = health.map(h =>
+    `<div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+      <span style="color:${colors[h.level]||'var(--text-dim)'}">${icons[h.level]||''}</span>
+      <span>${h.msg}</span>
+    </div>`
+  ).join('');
+}
+
+function renderChannelsSummary(cfg) {
+  const channels = [
+    { key: 'email', name: 'Email (Gmail)' },
+    { key: 'telegram', name: 'Telegram' },
+    { key: 'whatsapp', name: 'WhatsApp' },
+    { key: 'imessage', name: 'iMessage' },
+  ];
+  document.getElementById('channels-summary').innerHTML = channels.map(ch => {
+    const enabled = cfg[ch.key]?.enabled;
+    return `<tr><td>${ch.name}</td><td>${enabled
+      ? '<span class="badge enabled">Enabled</span>'
+      : '<span class="badge disabled">Disabled</span>'}</td></tr>`;
+  }).join('');
+}
+
+function renderModelsSummary(cfg) {
+  document.getElementById('models-summary').innerHTML = Object.entries(cfg.models || {}).map(([key, m]) =>
+    `<tr>
+      <td style="font-weight:600;">${key}</td>
+      <td style="color:var(--text-dim);">${m.provider}</td>
+      <td>${key === cfg.default_model ? '<span class="badge running">Default</span>' : ''}</td>
+    </tr>`
+  ).join('');
+}
+
+function renderChannelsPage(cfg) {
+  const channels = [
+    { key: 'email', name: 'Email (Gmail)', icon: '\u2709\uFE0F', color: '#f87171',
+      details: () => `IMAP: ${cfg.email?.imap_host||'N/A'} \u00B7 Check every ${cfg.email?.check_interval_seconds||15}s` },
+    { key: 'telegram', name: 'Telegram', icon: '\u2708\uFE0F', color: '#38bdf8',
+      details: () => `Bot token: ${cfg.telegram?.bot_token ? 'Configured' : 'Not set'}` },
+    { key: 'whatsapp', name: 'WhatsApp', icon: '\uD83D\uDCAC', color: '#4ade80',
+      details: () => `Bridge port: ${cfg.whatsapp?.bridge_port||8766}` },
+    { key: 'imessage', name: 'iMessage', icon: '\uD83D\uDCF1', color: '#6c8cff',
+      details: () => `Handles: ${(cfg.imessage?.allowed_handles||[]).join(', ')||'None'}` },
+  ];
+  document.getElementById('channels-grid').innerHTML = channels.map(ch => {
+    const enabled = cfg[ch.key]?.enabled || false;
+    return `<div class="card channel-card">
+      <div class="channel-info">
+        <div class="channel-icon" style="background:${ch.color}22;color:${ch.color};font-size:20px;">${ch.icon}</div>
+        <div>
+          <div class="channel-name">${ch.name}</div>
+          <div class="channel-detail">${ch.details()}</div>
+        </div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" ${enabled?'checked':''} onchange="toggleChannel('${ch.key}',this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function renderModelsPage(cfg) {
+  const colors = { claude: 'var(--accent)', codex: 'var(--green)', ollama: 'var(--purple)' };
+  document.getElementById('default-model-select').value = cfg.default_model || 'claude';
+  document.getElementById('models-grid').innerHTML = Object.entries(cfg.models || {}).map(([key, m]) => {
+    const c = colors[key] || 'var(--text-dim)';
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:${c};"></div>
+        <span class="card-title" style="text-transform:capitalize;">${key}</span>
+        ${key === cfg.default_model ? '<span class="badge running" style="margin-left:auto;">Default</span>' : ''}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Provider</label>
+        <div style="font-size:13px;">${m.provider}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Model</label>
+        <div style="font-size:13px;color:var(--text-dim);">${m.model}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <div style="font-size:12px;color:var(--text-dim);">${m.api_key || (m.base_url ? m.base_url : 'Not set')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const chain = cfg.fallback_chain || [];
+  document.getElementById('fallback-chain').innerHTML = chain.map((m, i) =>
+    `<span class="tag active" style="font-size:13px;">${i+1}. ${m}</span>` +
+    (i < chain.length-1 ? '<span style="color:var(--text-dim);">\u2192</span>' : '')
+  ).join('');
+}
+
+function renderSecurityPage(cfg) {
+  const sec = cfg.security || {};
+  document.getElementById('sec-max-len').value = sec.max_message_length || 4000;
+  document.getElementById('sec-rate-limit').value = sec.rate_limit_per_minute || 20;
+  document.getElementById('sec-block-injection').checked = sec.block_prompt_injection !== false;
+  injectionPatterns = sec.injection_patterns || [];
+  renderPatterns();
+}
+
+function renderPatterns() {
+  document.getElementById('injection-patterns').innerHTML = injectionPatterns.map((p, i) =>
+    `<span class="tag" style="cursor:pointer;" onclick="removePattern(${i})" title="Click to remove">${p} \u00D7</span>`
+  ).join('');
+}
+
+function renderPlugins(plugins) {
+  if (!plugins.length) {
+    document.getElementById('plugins-grid').innerHTML = '<div class="card" style="text-align:center;color:var(--text-dim);grid-column:1/-1;">No plugins found</div>';
+    return;
+  }
+  document.getElementById('plugins-grid').innerHTML = plugins.map(p =>
+    `<div class="card">
+      <div class="card-title" style="margin-bottom:6px;">${p.name}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">${p.description||''}</div>
+      <div style="font-size:11px;color:var(--text-dim);">${p.file} \u00B7 ${(p.size/1024).toFixed(1)} KB</div>
+    </div>`
+  ).join('');
+}
+
+// Actions
+async function toggleChannel(channel, enabled) {
+  const res = await api('/api/channel/toggle', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ channel, enabled }),
+  });
+  if (res?.ok) { toast(`${channel} ${enabled?'enabled':'disabled'}`); loadAll(); }
+  else toast('Failed to update channel', 'error');
+}
+
+async function setDefaultModel() {
+  const model = document.getElementById('default-model-select').value;
+  const res = await api('/api/model/default', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ model }),
+  });
+  if (res?.ok) { toast(`Default model set to ${model}`); loadAll(); }
+  else toast('Failed to update model', 'error');
+}
+
+async function saveSecurity() {
+  const data = {
+    max_message_length: parseInt(document.getElementById('sec-max-len').value),
+    rate_limit_per_minute: parseInt(document.getElementById('sec-rate-limit').value),
+    block_prompt_injection: document.getElementById('sec-block-injection').checked,
+    injection_patterns: injectionPatterns,
+  };
+  const res = await api('/api/security', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data),
+  });
+  if (res?.ok) { toast('Security settings saved'); loadAll(); }
+  else toast('Failed to save', 'error');
+}
+
+function addPattern() {
+  const input = document.getElementById('new-pattern');
+  const val = input.value.trim();
+  if (val && !injectionPatterns.includes(val)) { injectionPatterns.push(val); renderPatterns(); input.value = ''; }
+}
+function removePattern(idx) { injectionPatterns.splice(idx, 1); renderPatterns(); }
+
+async function refreshStatus() {
+  const status = await api('/api/status');
+  if (status) renderStatus(status);
+  toast('Status refreshed');
+}
+async function refreshHealth() {
+  const health = await api('/api/health');
+  if (health) renderHealth(health);
+}
+
+// Init
+loadAll();
+</script>
+</body>
+</html>

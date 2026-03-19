@@ -1,0 +1,85 @@
+{
+  "default_model": "claude",
+
+  "models": {
+    "claude": {
+      "provider": "anthropic",
+      "model": "claude-opus-4-6",
+      "api_key": ""
+    },
+    "codex": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "api_key": "YOUR_OPENAI_API_KEY"
+    },
+    "ollama": {
+      "provider": "ollama",
+      "model": "llama3",
+      "base_url": "http://localhost:11434"
+    }
+  },
+
+  "fallback_chain": ["claude", "codex", "ollama"],
+
+  "sessions_dir": "~/.pybridge/sessions",
+
+  "security": {
+    "hmac_secret": "CHANGE-ME-generate-a-random-secret",
+    "max_message_length": 4000,
+    "rate_limit_per_minute": 20,
+    "block_prompt_injection": true,
+    "injection_patterns": [
+      "ignore previous",
+      "ignore all previous",
+      "disregard",
+      "new instructions",
+      "system prompt",
+      "you are now",
+      "act as",
+      "jailbreak",
+      "dan mode",
+      "pretend you"
+    ]
+  },
+
+  "email": {
+    "enabled": false,
+    "imap_host": "imap.gmail.com",
+    "imap_port": 993,
+    "smtp_host": "smtp.gmail.com",
+    "smtp_port": 587,
+    "address": "YOUR_EMAIL@gmail.com",
+    "password": "YOUR_APP_PASSWORD",
+    "allowed_senders": ["YOUR_PHONE_EMAIL@gmail.com"],
+    "check_interval_seconds": 15
+  },
+
+  "telegram": {
+    "enabled": false,
+    "bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "allowed_user_ids": [123456789]
+  },
+
+  "whatsapp": {
+    "enabled": true,
+    "bridge_port": 8766,
+    "check_interval_seconds": 3,
+    "allowed_numbers": []
+  },
+
+  "imessage": {
+    "enabled": false,
+    "check_interval_seconds": 3,
+    "allowed_handles": ["+YOUR_PHONE_NUMBER"]
+  },
+
+  "stream": {
+    "port": 8765
+  },
+
+  "meeting": {
+    "zoom_path": "",
+    "teams_path": "",
+    "google_meet_browser": "default"
+  }
+}

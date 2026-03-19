@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  pybridge:
+    build: .
+    container_name: pybridge
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"     # Control Panel
+      - "8765:8765"     # Screen live-stream (optional)
+
+    volumes:
+      # Config — edit these on your host, changes apply on restart
+      - ./pybridge/config.json:/app/pybridge/config.json
+      - ./pybridge/.env:/app/pybridge/.env
+
+      # Persistent data — survives container rebuilds
+      - pybridge-sessions:/data/sessions
+      - pybridge-whatsapp:/data/whatsapp-auth
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYBRIDGE_SESSIONS_DIR=/data/sessions
+
+      # Pass API keys here OR in pybridge/.env — either works
+      # Uncomment and fill in:
+      # - ANTHROPIC_API_KEY=sk-ant-...
+      # - OPENAI_API_KEY=sk-...
+      # - TELEGRAM_BOT_TOKEN=...
+      # - HMAC_SECRET=...
+
+    # iMessage requires macOS host — not available in Docker
+    # Screen capture requires X11 forwarding on Linux (see README)
+
+volumes:
+  pybridge-sessions:
+  pybridge-whatsapp:
