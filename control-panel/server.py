@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-openAIConnect Control Panel — lightweight web GUI for managing PyBridge.
+pybridge.ai Control Panel — lightweight web GUI for managing PyBridge.
 
 Run:  python3 control-panel/server.py
 Open:  http://localhost:9090
@@ -320,7 +320,7 @@ def main():
 
     server = ReusableHTTPServer((HOST, port), ControlPanelHandler)
     print(f"\n  \u2554{'═'*46}\u2557")
-    print(f"  \u2551   openAIConnect Control Panel                \u2551")
+    print(f"  \u2551   pybridge.ai Control Panel                \u2551")
     print(f"  \u2551   http://{HOST}:{port}                    \u2551")
     print(f"  \u255a{'═'*46}\u255d\n")
 

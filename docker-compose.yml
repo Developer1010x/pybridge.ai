@@ -23,7 +23,7 @@ services:
       - PYTHONUNBUFFERED=1
       - PYBRIDGE_SESSIONS_DIR=/data/sessions
 
-      # Pass API keys here OR in pybridge/.env — either works
+      # Pass API keys here OR in pybridge/.env (either works)
       # Uncomment and fill in:
       # - ANTHROPIC_API_KEY=sk-ant-...
       # - OPENAI_API_KEY=sk-...

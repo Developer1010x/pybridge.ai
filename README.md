@@ -1,4 +1,4 @@
-# openAIConnect
+# pybridge.ai
 
 **Control AI from your phone.** Send messages via WhatsApp, Telegram, Email, or iMessage — PyBridge routes them to Claude, OpenAI, or local Ollama and replies back.
 
@@ -18,8 +18,8 @@ Works on **Linux, macOS, and Windows**.
 ## Quick Start (Docker)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/openAIConnect.git
-cd openAIConnect
+git clone https://github.com/Developer1010x/pybridge.ai.git
+cd pybridge.ai
 
 # Configure
 cp pybridge/.env.example pybridge/.env
@@ -83,7 +83,7 @@ See the full command reference in the [control panel](http://localhost:9090) und
 ## Project Structure
 
 ```
-openAIConnect/
+pybridge.ai/
 ├── pybridge/                  # Core daemon
 │   ├── main.py                # Entry point + command router
 │   ├── security.py            # Auth, rate limiting, injection protection

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────
-#  PyBridge — multi-platform Docker image
+#  pybridge.ai — multi-platform Docker image
 #  Python 3.11 + Node.js 20 + Chromium (for Playwright browser plugin)
 # ─────────────────────────────────────────────────────────────────────
 
