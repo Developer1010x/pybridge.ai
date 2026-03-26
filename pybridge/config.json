@@ -1,5 +1,5 @@
 {
-  "default_model": "claude",
+  "default_model": "opencode",
 
   "models": {
     "claude": {
@@ -16,10 +16,31 @@
       "provider": "ollama",
       "model": "llama3",
       "base_url": "http://localhost:11434"
+    },
+    "opencode": {
+      "provider": "opencode",
+      "model": "claude-sonnet-4-20250514",
+      "base_url": "http://localhost:54321",
+      "project_path": ""
+    },
+    "gemini": {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash",
+      "api_key": ""
+    },
+    "groq": {
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "api_key": ""
+    },
+    "mistral": {
+      "provider": "mistral",
+      "model": "mistral-large-latest",
+      "api_key": ""
     }
   },
 
-  "fallback_chain": ["claude", "codex", "ollama"],
+  "fallback_chain": ["opencode", "claude", "codex", "ollama"],
 
   "sessions_dir": "~/.pybridge/sessions",
 

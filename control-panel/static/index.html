@@ -247,6 +247,10 @@ pre.code-block .comment { color: #555; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
       <span>Channels</span>
     </div>
+    <div class="nav-item" data-page="contacts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/></svg>
+      <span>Contacts</span>
+    </div>
     <div class="nav-item" data-page="models">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4m-2.93-7.07l-2.83 2.83m-8.48 8.48l-2.83 2.83m0-14.14l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
       <span>Models</span>
@@ -354,6 +358,26 @@ pre.code-block .comment { color: #555; }
     <div class="grid grid-2" id="channels-grid"></div>
   </section>
 
+  <!-- Contacts -->
+  <section class="page" id="page-contacts">
+    <h2 class="page-title">Contacts</h2>
+    <p class="page-subtitle">Manage authorized contacts who can control PyBridge</p>
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header"><span class="card-title">Add Contact</span></div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <select class="form-select" id="contact-channel" style="max-width: 150px;">
+          <option value="whatsapp">WhatsApp</option>
+          <option value="telegram">Telegram</option>
+          <option value="email">Email</option>
+          <option value="imessage">iMessage</option>
+        </select>
+        <input class="form-input" id="contact-value" placeholder="Number/ID/Email" style="flex: 1; max-width: 250px;">
+        <button class="btn btn-primary btn-sm" onclick="addContact()">Add</button>
+      </div>
+    </div>
+    <div class="grid grid-2" id="contacts-grid"></div>
+  </section>
+
   <!-- Models -->
   <section class="page" id="page-models">
     <h2 class="page-title">AI Models</h2>
@@ -362,9 +386,13 @@ pre.code-block .comment { color: #555; }
       <div class="card-header"><span class="card-title">Default Model</span></div>
       <div style="display:flex;gap:10px;align-items:center;">
         <select class="form-select" id="default-model-select" style="max-width:200px;">
-          <option value="claude">Claude</option>
-          <option value="codex">Codex / OpenAI</option>
+          <option value="claude">Claude (Anthropic)</option>
+          <option value="codex">Codex (OpenAI)</option>
           <option value="ollama">Ollama (Local)</option>
+          <option value="opencode">OpenCode</option>
+          <option value="gemini">Gemini (Google)</option>
+          <option value="groq">Groq</option>
+          <option value="mistral">Mistral</option>
         </select>
         <button class="btn btn-primary btn-sm" onclick="setDefaultModel()">Save</button>
       </div>
@@ -565,8 +593,8 @@ function toast(msg, type = 'success') {
 
 // Load all data
 async function loadAll() {
-  const [cfg, status, plugins, health] = await Promise.all([
-    api('/api/config'), api('/api/status'), api('/api/plugins'), api('/api/health'),
+  const [cfg, status, plugins, health, contacts] = await Promise.all([
+    api('/api/config'), api('/api/status'), api('/api/plugins'), api('/api/health'), api('/api/contacts/list'),
   ]);
 
   if (cfg) {
@@ -587,6 +615,7 @@ async function loadAll() {
     document.getElementById('stat-plugins').textContent = plugins.length;
   }
   if (health) renderHealth(health);
+  if (contacts) renderContactsPage(contacts);
 }
 
 // Renderers
@@ -594,6 +623,7 @@ function renderStatus(s) {
   const services = [
     ['PyBridge Daemon', s.pybridge],
     ['Ollama (Local LLM)', s.ollama],
+    ['OpenCode Server', s.opencode],
     ['WhatsApp Bridge', s.whatsapp_bridge],
   ];
   document.getElementById('status-table').innerHTML = services.map(([name, val]) => {
@@ -726,6 +756,52 @@ function renderPatterns() {
   document.getElementById('injection-patterns').innerHTML = injectionPatterns.map((p, i) =>
     `<span class="tag" style="cursor:pointer;" onclick="removePattern(${i})" title="Click to remove">${p} \u00D7</span>`
   ).join('');
+}
+
+function renderContactsPage(contacts) {
+  const channelColors = {
+    whatsapp: '#25D366',
+    telegram: '#229ED9',
+    email: '#EA4335',
+    imessage: '#6C8CFF',
+  };
+  
+  document.getElementById('contacts-grid').innerHTML = Object.entries(contacts).map(([channel, list]) => {
+    const color = channelColors[channel] || 'var(--text-dim)';
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span class="card-title" style="text-transform:capitalize;">${channel}</span>
+        <span class="badge" style="margin-left:auto;">${list.length} contacts</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${list.length ? list.map(c => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 10px;background:var(--bg);border-radius:6px;">
+          <span>${c}</span>
+          <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;" onclick="removeContact('${channel}','${c}')">Remove</button>
+        </div>`).join('') : '<span style="font-size:13px;color:var(--text-dim);">No contacts added</span>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addContact() {
+  const channel = document.getElementById('contact-channel').value;
+  const value = document.getElementById('contact-value').value.trim();
+  if (!value) { toast('Please enter a value', 'error'); return; }
+  const res = await api('/api/contacts', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ channel, value, action: 'add' }),
+  });
+  if (res?.ok) { toast('Contact added'); loadAll(); document.getElementById('contact-value').value = ''; }
+  else toast('Failed to add contact', 'error');
+}
+
+async function removeContact(channel, value) {
+  const res = await api('/api/contacts', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ channel, value, action: 'remove' }),
+  });
+  if (res?.ok) { toast('Contact removed'); loadAll(); }
+  else toast('Failed to remove contact', 'error');
 }
 
 function renderPlugins(plugins) {

@@ -35,9 +35,10 @@ _sdk_sessions: dict[str, str] = {}   # identity → last session_id (for resumpt
 # ── Model ID mapping (config name → actual model string) ─────────────────────
 
 _BUILTIN_MODELS = {
-    "claude":  "claude-opus-4-6",
-    "codex":   "gpt-4o",
-    "ollama":  "llama3",
+    "claude":   "claude-opus-4-6",
+    "codex":    "gpt-4o",
+    "ollama":   "llama3",
+    "opencode": "claude-sonnet-4-20250514",
 }
 
 

@@ -282,6 +282,63 @@ class ControlPanelHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 self._json_response({"ok": False, "error": str(e)}, 400)
 
+        elif self.path == "/api/contacts":
+            try:
+                data = json.loads(body)
+                channel = data.get("channel")
+                value = data.get("value")
+                action = data.get("action", "add")
+                
+                cfg = read_config()
+                
+                if channel == "whatsapp":
+                    contacts = cfg.setdefault("whatsapp", {}).setdefault("allowed_numbers", [])
+                    if action == "add" and value not in contacts:
+                        contacts.append(value)
+                    elif action == "remove" and value in contacts:
+                        contacts.remove(value)
+                elif channel == "telegram":
+                    contacts = cfg.setdefault("telegram", {}).setdefault("allowed_user_ids", [])
+                    try:
+                        user_id = int(value)
+                        if action == "add" and user_id not in contacts:
+                            contacts.append(user_id)
+                        elif action == "remove" and user_id in contacts:
+                            contacts.remove(user_id)
+                    except ValueError:
+                        self._json_response({"ok": False, "error": "Invalid Telegram user ID"}, 400)
+                        return
+                elif channel == "email":
+                    contacts = cfg.setdefault("email", {}).setdefault("allowed_senders", [])
+                    if action == "add" and value not in contacts:
+                        contacts.append(value)
+                    elif action == "remove" and value in contacts:
+                        contacts.remove(value)
+                elif channel == "imessage":
+                    contacts = cfg.setdefault("imessage", {}).setdefault("allowed_handles", [])
+                    if action == "add" and value not in contacts:
+                        contacts.append(value)
+                    elif action == "remove" and value in contacts:
+                        contacts.remove(value)
+                
+                ok = write_config(cfg)
+                self._json_response({"ok": ok})
+            except Exception as e:
+                self._json_response({"ok": False, "error": str(e)}, 400)
+
+        elif self.path == "/api/contacts/list":
+            try:
+                cfg = read_config()
+                contacts = {
+                    "whatsapp": cfg.get("whatsapp", {}).get("allowed_numbers", []),
+                    "telegram": cfg.get("telegram", {}).get("allowed_user_ids", []),
+                    "email": cfg.get("email", {}).get("allowed_senders", []),
+                    "imessage": cfg.get("imessage", {}).get("allowed_handles", []),
+                }
+                self._json_response(contacts)
+            except Exception as e:
+                self._json_response({"error": str(e)}, 400)
+
         else:
             self.send_error(404)
 

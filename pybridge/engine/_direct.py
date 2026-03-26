@@ -10,7 +10,8 @@ import logging
 import random
 
 from .providers import (
-    call_openai, call_ollama,
+    call_openai, call_ollama, call_opencode,
+    call_gemini, call_groq, call_mistral,
     list_ollama_models, classify_error,
 )
 from .session import SessionManager
@@ -59,6 +60,14 @@ def _call(cfg: dict, candidate: dict, messages: list, system: str, tools) -> dic
     elif p == "ollama":
         return call_ollama(messages, m, system,
                            base_url=url or "http://localhost:11434")
+    elif p == "opencode":
+        return call_opencode("", messages, m, base_url=url or "http://localhost:54321")
+    elif p == "gemini":
+        return call_gemini(messages, m, key, system)
+    elif p == "groq":
+        return call_groq(messages, m, key, system, tools)
+    elif p == "mistral":
+        return call_mistral(messages, m, key, system)
     else:
         return call_openai(messages, m, key, system, tools, base_url=url)
 

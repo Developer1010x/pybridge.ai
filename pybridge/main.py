@@ -104,17 +104,89 @@ SEC = CONFIG["security"]
 
 current_model = CONFIG["default_model"]
 
+# ── OpenCode helper functions ────────────────────────────────────────────────
+
+_opencode_sessions: dict[str, str] = {}
+
+def _check_opencode_health() -> str:
+    cfg = CONFIG["models"].get("opencode", {})
+    base_url = cfg.get("base_url", "http://localhost:54321")
+    healthy = providers.opencode_health(base_url)
+    if healthy:
+        return f"OpenCode server is healthy at {base_url}"
+    return f"OpenCode server NOT reachable at {base_url}"
+
+def _list_opencode_sessions() -> str:
+    cfg = CONFIG["models"].get("opencode", {})
+    base_url = cfg.get("base_url", "http://localhost:54321")
+    sessions = providers.opencode_sessions(base_url)
+    if not sessions:
+        return "No active OpenCode sessions. Use 'oc run <prompt>' to start one."
+    lines = ["OpenCode Sessions:"]
+    for s in sessions:
+        sid = s.get("id", "?")
+        title = s.get("title", s.get("name", "Untitled"))
+        lines.append(f"  {sid[:12]}... - {title}")
+    return "\n".join(lines)
+
+def _attach_opencode_session(session_id: str) -> str:
+    global _opencode_sessions
+    _opencode_sessions["default"] = session_id
+    return f"Attached to session {session_id[:12]}..."
+
+def _handle_opencode(args: str) -> str:
+    cfg = CONFIG["models"].get("opencode", {})
+    base_url = cfg.get("base_url", "http://localhost:54321")
+    model = cfg.get("model", "claude-sonnet-4-20250514")
+
+    if not args:
+        return "Usage: oc run <prompt> | oc sessions | oc health"
+
+    parts = args.split(None, 1)
+    cmd = parts[0]
+
+    if cmd == "run" and len(parts) > 1:
+        prompt = parts[1]
+        try:
+            resp = providers.opencode_send_message("default", prompt, base_url)
+            if isinstance(resp, dict):
+                data = resp.get("data", {})
+                if isinstance(data, dict):
+                    return data.get("result", str(resp))
+            return str(resp)
+        except Exception as e:
+            session = providers.opencode_create_session(base_url)
+            if session:
+                sid = session.get("id", "default")
+                _opencode_sessions["default"] = sid
+                try:
+                    resp = providers.opencode_send_message(sid, prompt, base_url)
+                    data = resp.get("data", {}) if isinstance(resp, dict) else {}
+                    return data.get("result", str(resp))
+                except Exception as e2:
+                    return f"Error: {e2}"
+            return f"Error creating session: {e}"
+
+    if cmd == "sessions":
+        return _list_opencode_sessions()
+
+    if cmd == "health":
+        return _check_opencode_health()
+
+    return f"Unknown opencode command: {cmd}. Use: run, sessions, health"
+
 # ── AI Engine ─────────────────────────────────────────────────────────────────
 
 from engine.session import SessionManager
 from engine.runner  import AgentRunner
+from engine import providers
 
 _sessions_dir = os.environ.get("PYBRIDGE_SESSIONS_DIR") or os.path.expanduser(CONFIG.get("sessions_dir", "~/.pybridge/sessions"))
 _session_mgr  = SessionManager(_sessions_dir)
 _runner       = AgentRunner(CONFIG, _session_mgr)
 
 
-def ask_ai(prompt: str, identity: str) -> str:
+def ask_ai(prompt: str, identity: str) -> str | None:
     """
     Send prompt to AI engine.
     Uses active model, maintains per-identity session history,
@@ -128,7 +200,167 @@ def ask_ai(prompt: str, identity: str) -> str:
         log.info(f"[ai] {provider}/{model} | in={usage['input']} out={usage['output']}")
         return result["text"]
     except Exception as e:
-        return f"Error: {e}"
+        log.warning(f"[ai] LLM failed: {e}")
+        return None
+
+def ask_ai_with_fallback(prompt: str, identity: str) -> tuple[str, str | None]:
+    """
+    Try AI first, if all fail fall back to direct command mode.
+    Returns (reply, file_path)
+    """
+    result = ask_ai(prompt, identity)
+    if result:
+        return f"[{current_model}]\n\n{result}", None
+    
+    log.info("[ai] All LLMs failed, falling back to direct command mode")
+    return _handle_direct_command(prompt, identity)
+
+# ── Direct command mode (when LLM unavailable) ─────────────────────────────────
+
+ALLOWED_COMMANDS = {
+    "system": ["ps", "top", "htop", "uptime", "df", "du", "free", "hostname", "uname", "whoami", "date", "cal"],
+    "process": ["ps aux", "kill", "pkill", "pgrep", "top", "htop"],
+    "network": ["ipconfig", "ifconfig", "ping", "netstat", "ss", "curl", "wget", "hostname -I", "arp", "traceroute"],
+    "docker": ["docker ps", "docker ps -a", "docker images", "docker logs", "docker stats", "docker inspect"],
+    "git": ["git status", "git log --oneline -5", "git diff", "git branch -a", "git remote -v"],
+    "files": ["ls", "ls -la", "ls -lh", "pwd", "cat", "head", "tail", "wc", "find", "grep"],
+    "screen": ["screenshot", "ss", "record"],
+    "clipboard": ["clip", "paste", "copy"],
+    "meet": ["meet zoom", "meet google", "meet teams"],
+}
+
+DIRECT_COMMANDS = {
+    "ps": "ps aux | head -20",
+    "cpu": "top -bn1 | head -10",
+    "mem": "free -h",
+    "disk": "df -h",
+    "ports": "netstat -tulpn 2>/dev/null || ss -tulpn",
+    "uptime": "uptime",
+    "hostname": "hostname",
+    "ip": "hostname -I",
+    "docker ps": "docker ps",
+    "docker logs": "docker logs",
+    "docker stats": "docker stats --no-stream",
+    "git status": "git status",
+    "git log": "git log --oneline -5",
+    "git diff": "git diff --stat",
+    "ls": "ls -la",
+    "pwd": "pwd",
+}
+
+
+def _handle_direct_command(prompt: str, identity: str) -> tuple[str, str | None]:
+    """
+    Handle commands directly when LLM is unavailable.
+    Maps natural language to allowed commands.
+    """
+    lower = prompt.lower().strip()
+    
+    # Check exact matches first
+    for cmd, output in DIRECT_COMMANDS.items():
+        if lower == cmd or lower.startswith(cmd + " "):
+            extra = prompt[len(cmd):].strip() if len(prompt) > len(cmd) else ""
+            full_cmd = output + (" " + extra if extra else "")
+            result = _run_shell(full_cmd)
+            return f"$ {full_cmd}\n\n{result}", None
+    
+    # Check screenshot/record
+    if lower in ("screenshot", "ss", "snap"):
+        try:
+            path = screen.take_screenshot()
+            return "Screenshot taken.", path
+        except Exception as e:
+            return f"Screenshot failed: {e}", None
+    
+    if lower.startswith("record "):
+        parts = lower.split()
+        seconds = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 10
+        path, err = screen.record_screen(seconds)
+        if err:
+            return f"Recording failed: {err}", None
+        return f"Screen recorded ({seconds}s).", path
+    
+    # Check video calls
+    if lower.startswith("facetime ") or lower == "facetime":
+        return _start_facetime(prompt), None
+    
+    if lower.startswith("whatsapp call") or lower.startswith("wa call"):
+        return _start_whatsapp_call(prompt), None
+    
+    if lower.startswith("zoom") or lower.startswith("meet zoom"):
+        return meet.handle_meet("zoom", CONFIG.get("meeting", {})), None
+    
+    if lower.startswith("google meet") or lower.startswith("meet google"):
+        return meet.handle_meet("google", CONFIG.get("meeting", {})), None
+    
+    if lower.startswith("teams") or lower.startswith("meet teams"):
+        return meet.handle_meet("teams", CONFIG.get("meeting", {})), None
+    
+    # Clipboard
+    if lower in ("clip", "clipboard", "paste"):
+        return clipboard.handle(lower, ""), None
+    
+    if lower.startswith("copy "):
+        return clipboard.handle("copy", prompt[5:].strip()), None
+    
+    # Help for direct mode
+    if lower in ("help", "commands", "?"):
+        return (
+            "Direct Command Mode (LLM unavailable)\n\n"
+            "System:\n"
+            "  ps, cpu, mem, disk, ports, uptime, hostname, ip\n\n"
+            "Docker:\n"
+            "  docker ps, docker logs, docker stats\n\n"
+            "Git:\n"
+            "  git status, git log, git diff\n\n"
+            "Screen:\n"
+            "  ss, screenshot, record 10\n\n"
+            "Video Calls:\n"
+            "  facetime <name/number>\n"
+            "  whatsapp call <number>\n"
+            "  zoom, google meet, teams\n\n"
+            "Clipboard:\n"
+            "  clip, copy <text>"
+        ), None
+    
+    return (
+        "LLM unavailable. Use direct commands:\n"
+        "  ps, cpu, mem, disk, ports, uptime\n"
+        "  docker ps, docker logs, git status\n"
+        "  ss, screenshot, record\n"
+        "  facetime <contact>, whatsapp call <number>\n"
+        "  zoom, google meet, teams\n"
+        "  help for more"
+    ), None
+
+
+def _start_facetime(args: str) -> str:
+    """Start FaceTime call"""
+    import subprocess
+    contact = args.replace("facetime", "").strip()
+    if not contact:
+        return "Usage: facetime <name or number>"
+    try:
+        if OS == "Darwin":
+            subprocess.run(["open", f"facetime:{contact}"], check=True)
+            return f"Starting FaceTime call with {contact}..."
+        else:
+            return "FaceTime is only available on macOS"
+    except Exception as e:
+        return f"Failed to start FaceTime: {e}"
+
+
+def _start_whatsapp_call(args: str) -> str:
+    """Start WhatsApp call"""
+    import subprocess
+    number = args.replace("whatsapp call", "").replace("wa call", "").strip()
+    if not number:
+        return "Usage: whatsapp call <number>"
+    try:
+        subprocess.run(["open", f"whatsapp://send?phone={number}"], check=True)
+        return f"Opening WhatsApp to call {number}..."
+    except Exception as e:
+        return f"Failed to start WhatsApp call: {e}"
 
 
 def list_models() -> str:
@@ -209,6 +441,10 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
     if lower.startswith("meet"):
         args = text[4:].strip()
         return meet.handle_meet(args, CONFIG.get("meeting", {})), None
+
+    if lower.startswith("whatsapp call") or lower.startswith("wa call") or lower.startswith("whatsapp video"):
+        number = text.split()[-1] if text.split() else ""
+        return meet.start_whatsapp_video(number), None
 
     # ── Terminal command ───────────────────────────────────────────────────
     if lower.startswith("run "):
@@ -302,6 +538,12 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
             "VS Code:\n"
             "  vscode open <file>           open in VS Code\n"
             "  vscode ext list/install      extensions\n\n"
+            "OpenCode:\n"
+            "  oc run <prompt>              run prompt in OpenCode\n"
+            "  oc sessions                  list sessions\n"
+            "  oc attach <id>              attach to session\n"
+            "  oc health                    check server health\n"
+            "  use opencode                 switch to OpenCode model\n\n"
             "  run <cmd>                    any terminal command\n"
             "  status / help                info"
         ), None
@@ -415,9 +657,26 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
     if lower.startswith("vscode") or lower.startswith("code "):
         return vscode.handle("vscode", text.split(None, 1)[1] if " " in text else ""), None
 
+    # ── OpenCode ───────────────────────────────────────────────────────────────
+    if lower.startswith("opencode ") or lower.startswith("oc "):
+        return _handle_opencode(text[len(lower.split()[0])+1:].strip()), None
+
+    if lower in ("opencode", "oc", "oc sessions", "opencode sessions"):
+        return _list_opencode_sessions(), None
+
+    if lower.startswith("oc attach ") or lower.startswith("opencode attach "):
+        args = text.split(None, 1)[1].strip()
+        return _attach_opencode_session(args), None
+
+    if lower in ("opencode health", "oc health"):
+        return _check_opencode_health(), None
+
+    if lower in ("opencode models", "oc models"):
+        return "Use any model via OpenCode provider. Configure in config.json.", None
+
     # ── Forward to AI ─────────────────────────────────────────────────────
-    reply = ask_ai(text, identity)
-    return f"[{current_model}]\n\n{reply}", None
+    reply, file_path = ask_ai_with_fallback(text, identity)
+    return reply, file_path
 
 def _run_shell(cmd: str) -> str:
     try:

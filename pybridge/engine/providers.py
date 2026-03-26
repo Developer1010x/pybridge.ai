@@ -219,3 +219,193 @@ def list_ollama_models(base_url: str = "http://localhost:11434") -> list[str]:
         return [m["name"] for m in data.get("models", [])]
     except Exception:
         return []
+
+# ── OpenCode (via REST API) ───────────────────────────────────────────────────
+
+def call_opencode(prompt: str, messages: list, model: str,
+                  base_url: str = "http://localhost:54321",
+                  max_tokens: int = 4096, timeout: int = 120) -> dict:
+    url = base_url.rstrip("/") + "/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+
+    full_messages = [{"role": "user", "content": prompt}]
+    if messages:
+        full_messages = messages + full_messages
+
+    payload = {
+        "model": model,
+        "messages": full_messages,
+        "max_tokens": max_tokens,
+    }
+
+    try:
+        raw = _http_post(url, payload, headers, timeout)
+        choice = raw.get("choices", [{}])[0]
+        msg = choice.get("message", {})
+        text = msg.get("content", "")
+
+        usage_raw = raw.get("usage", {})
+        usage = {
+            "input": usage_raw.get("prompt_tokens", 0),
+            "output": usage_raw.get("completion_tokens", 0),
+            "total": usage_raw.get("total_tokens", 0),
+        }
+        return _resp(text, [], "end_turn", usage)
+    except Exception as e:
+        raise RuntimeError(f"OpenCode API error: {e}")
+
+
+def opencode_sessions(base_url: str = "http://localhost:54321") -> list[dict]:
+    try:
+        req = urllib.request.Request(base_url.rstrip("/") + "/session")
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            return data.get("data", []) if isinstance(data, dict) else data
+    except Exception as e:
+        log.warning(f"Failed to list OpenCode sessions: {e}")
+        return []
+
+
+def opencode_create_session(base_url: str = "http://localhost:54321",
+                           project_path: str = "") -> dict | None:
+    try:
+        url = base_url.rstrip("/") + "/session"
+        payload = {}
+        if project_path:
+            payload["project_path"] = project_path
+        headers = {"Content-Type": "application/json"}
+        raw = _http_post(url, payload, headers, timeout=30)
+        return raw if raw else None
+    except Exception as e:
+        log.warning(f"Failed to create OpenCode session: {e}")
+        return None
+
+
+def opencode_send_message(session_id: str, prompt: str,
+                         base_url: str = "http://localhost:54321",
+                         timeout: int = 120) -> dict:
+    url = base_url.rstrip("/") + f"/session/{session_id}/message"
+    headers = {"Content-Type": "application/json"}
+    payload = {"prompt": prompt}
+
+    data = _http_post(url, payload, headers, timeout)
+    return data
+
+
+def opencode_health(base_url: str = "http://localhost:54321") -> bool:
+    try:
+        req = urllib.request.Request(base_url.rstrip("/") + "/health")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+# ── Google Gemini ────────────────────────────────────────────────────────────────
+
+def call_gemini(messages: list, model: str, api_key: str,
+                system: str = "", max_tokens: int = 4096,
+                timeout: int = 120) -> dict:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+
+    full_contents = []
+    if system:
+        full_contents.append({"role": "user", "parts": [{"text": system}]})
+    for msg in messages:
+        full_contents.append({"role": msg["role"], "parts": [{"text": msg["content"]}]})
+
+    payload = {
+        "contents": full_contents,
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": 0.7,
+        }
+    }
+
+    raw = _http_post(url, payload, headers, timeout)
+    
+    text = ""
+    if "candidates" in raw and raw["candidates"]:
+        candidate = raw["candidates"][0]
+        if "content" in candidate and "parts" in candidate["content"]:
+            for part in candidate["content"]["parts"]:
+                text += part.get("text", "")
+
+    usage_raw = raw.get("usageMetadata", {})
+    usage = {
+        "input": usage_raw.get("promptTokenCount", 0),
+        "output": usage_raw.get("candidatesTokenCount", 0),
+        "total": usage_raw.get("totalTokenCount", 0),
+    }
+    return _resp(text, [], "end_turn", usage)
+
+# ── Groq ─────────────────────────────────────────────────────────────────────────
+
+def call_groq(messages: list, model: str, api_key: str,
+              system: str = "", tools: list = None,
+              max_tokens: int = 4096, timeout: int = 120) -> dict:
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    full_messages = []
+    if system:
+        full_messages.append({"role": "system", "content": system})
+    full_messages.extend(messages)
+
+    payload = {
+        "model": model,
+        "messages": full_messages,
+        "max_tokens": max_tokens,
+    }
+
+    raw = _http_post(url, payload, headers, timeout)
+    choice = raw.get("choices", [{}])[0]
+    msg = choice.get("message", {})
+    text = msg.get("content", "")
+
+    usage_raw = raw.get("usage", {})
+    usage = {
+        "input": usage_raw.get("prompt_tokens", 0),
+        "output": usage_raw.get("completion_tokens", 0),
+        "total": usage_raw.get("total_tokens", 0),
+    }
+    return _resp(text, [], "end_turn", usage)
+
+# ── Mistral ────────────────────────────────────────────────────────────────────
+
+def call_mistral(messages: list, model: str, api_key: str,
+                 system: str = "", max_tokens: int = 4096,
+                 timeout: int = 120) -> dict:
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    full_messages = []
+    if system:
+        full_messages.append({"role": "system", "content": system})
+    full_messages.extend(messages)
+
+    payload = {
+        "model": model,
+        "messages": full_messages,
+        "max_tokens": max_tokens,
+    }
+
+    raw = _http_post(url, payload, headers, timeout)
+    choice = raw.get("choices", [{}])[0]
+    msg = choice.get("message", {})
+    text = msg.get("content", "")
+
+    usage_raw = raw.get("usage", {})
+    usage = {
+        "input": usage_raw.get("prompt_tokens", 0),
+        "output": usage_raw.get("completion_tokens", 0),
+        "total": usage_raw.get("total_tokens", 0),
+    }
+    return _resp(text, [], "end_turn", usage)

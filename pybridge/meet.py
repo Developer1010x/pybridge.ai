@@ -168,3 +168,41 @@ def handle_meet(args: str, meeting_cfg: dict) -> str:
             "  meet teams   → Start MS Teams meeting\n\n"
             "After starting: send 'screenshot' to see the meeting ID/link."
         )
+
+# ── WhatsApp Video Call ────────────────────────────────────────────────────────
+
+def start_whatsapp_call(phone: str = "") -> str:
+    """Start WhatsApp call or video call"""
+    try:
+        if OS == "Darwin":
+            if phone:
+                subprocess.Popen(["open", f"whatsapp://send?phone={phone}"])
+                return f"WhatsApp opened with number {phone}. Click call to start video call."
+            else:
+                subprocess.Popen(["open", "whatsapp://"])
+                return "WhatsApp opened. Select contact and start video call."
+        elif OS == "Windows":
+            whatsapp_path = shutil.which("WhatsApp") or r"C:\Program Files\WhatsApp\WhatsApp.exe"
+            if os.path.exists(whatsapp_path):
+                subprocess.Popen([whatsapp_path])
+                return "WhatsApp opened. Select contact and start video call."
+            else:
+                open_url("https://web.whatsapp.com")
+                return "WhatsApp not installed. Opened web WhatsApp."
+        else:
+            open_url("https://web.whatsapp.com")
+            return "Opened web WhatsApp. Install WhatsApp for video calls."
+    except Exception as e:
+        return f"Could not start WhatsApp: {e}"
+
+def start_whatsapp_video(phone: str = "") -> str:
+    """Start WhatsApp video call (attempts direct video call)"""
+    try:
+        if OS == "Darwin":
+            if phone:
+                subprocess.Popen(["open", f"whatsapp://send?phone={phone}&video=true"])
+                return f"Starting WhatsApp video call with {phone}..."
+            return "Please specify phone number: whatsapp video <number>"
+        return start_whatsapp_call(phone)
+    except Exception as e:
+        return f"Could not start video call: {e}"

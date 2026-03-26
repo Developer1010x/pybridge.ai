@@ -188,3 +188,81 @@ def stop_stream() -> str:
         _stream_server = None
         stopped.append("server")
     return f"Stream stopped." if stopped else "No stream was running."
+
+# ── Enhanced Screenshot Features ───────────────────────────────────────────────
+
+def take_region_screenshot(x: int, y: int, w: int, h: int) -> str:
+    """Take a screenshot of a specific region"""
+    path = tempfile.mktemp(suffix=".png")
+    
+    if OS == "Darwin":
+        subprocess.run(["screencapture", "-x", "-r", f"-i{0},{1},{2},{3}".format(x, y, w, h), path], check=True)
+    elif OS == "Windows":
+        ps = (
+            f"Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
+            f"$x={x};$y={y};$w={w};$h={h};"
+            f"$b=New-Object System.Drawing.Bitmap($w,$h);"
+            f"$g=[System.Drawing.Graphics]::FromImage($b);"
+            f"$g.CopyFromScreen($x,$y,0,0,(New-Object System.Drawing.Size($w,$h)));"
+            f"$b.Save('{path}');"
+        )
+        subprocess.run(["powershell", "-Command", ps], check=True)
+    else:
+        subprocess.run(["import", "-window", "root", "-crop", f"{w}x{h}+{x}+{y}", path], check=True)
+    return path
+
+def take_window_screenshot(window_name: str = "") -> str:
+    """Take screenshot of a specific window"""
+    path = tempfile.mktemp(suffix=".png")
+    
+    if OS == "Darwin":
+        if window_name:
+            subprocess.run(["screencapture", "-x", "-W", f'"{window_name}"', path], check=True)
+        else:
+            subprocess.run(["screencapture", "-x", "-i", path], check=True)
+    elif OS == "Windows":
+        ps = f"Add-Type -AssemblyName System.Windows.Forms,System.Drawing;[System.Windows.Forms.Screen]::PrimaryScreen"
+        subprocess.run(["powershell", "-Command", ps], check=True)
+        subprocess.run(["screencapture", "-x", path], check=True)
+    else:
+        subprocess.run(["import", "-window", window_name or "root", path], check=True)
+    return path
+
+def take_timelapse(interval_seconds: int, count: int, output_dir: str = "") -> list[str]:
+    """Take multiple screenshots at intervals"""
+    if not output_dir:
+        output_dir = tempfile.mkdtemp()
+    
+    paths = []
+    for i in range(count):
+        path = os.path.join(output_dir, f"frame_{i:03d}.png")
+        if OS == "Darwin":
+            subprocess.run(["screencapture", "-x", path], check=True)
+        elif OS == "Windows":
+            from PIL import ImageGrab
+            ImageGrab.grab().save(path)
+        else:
+            subprocess.run(["scrot", path], check=True)
+        paths.append(path)
+        if i < count - 1:
+            time.sleep(interval_seconds)
+    return paths
+
+def record_gif(seconds: int = 5, fps: int = 10) -> tuple[str | None, str | None]:
+    """Record screen as GIF"""
+    if not shutil.which("ffmpeg"):
+        return None, "ffmpeg not found. Install ffmpeg first."
+    
+    path = tempfile.mktemp(suffix=".gif")
+    cmd = [
+        "ffmpeg", "-y", "-framerate", str(fps),
+        *_ffmpeg_input_args(),
+        "-t", str(seconds),
+        "-vf", f"fps={fps},scale=480:-2:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+        path
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=seconds + 20)
+        return path, None
+    except Exception as e:
+        return None, f"GIF recording failed: {e}"
