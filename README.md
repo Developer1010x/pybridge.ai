@@ -47,7 +47,7 @@ Web dashboard at `http://localhost:9090` for managing:
 - Channels (enable/disable WhatsApp, Telegram, Email, iMessage)
 - Models (switch default, view fallback chain)
 - Security (rate limits, prompt injection protection)
-- Plugins (11 built-in: git, docker, code runner, scheduler, etc.)
+- Plugins (12 built-in: git, docker, code runner, network diagnostics, scheduler, etc.)
 
 ```bash
 # Standalone (without Docker)
@@ -60,7 +60,7 @@ python control-panel/server.py
 
 **3 AI Providers** — Claude (Anthropic), GPT/Codex (OpenAI), Ollama (local) with automatic fallback
 
-**11 Plugins** — Git/GitHub, Docker, code runner (Python/Node/Bash/Go/Ruby/SQL), file ops, process monitor, scheduler, log watcher, browser automation, clipboard, VS Code, package audits
+**12 Plugins** — Git/GitHub, Docker, code runner (Python/Node/Bash/Go/Ruby/SQL), file ops, process monitor, network diagnostics, scheduler, log watcher, browser automation, clipboard, VS Code, package audits
 
 **Security** — Rate limiting, prompt injection detection, message sanitization, sender allowlists, HMAC signing
 
@@ -74,6 +74,9 @@ python control-panel/server.py
 | `ss` | Screenshot |
 | `git status` / `pr list` | Git & GitHub |
 | `docker ps` / `docker logs` | Container management |
+| `ping <host>` / `dns <host>` | Network reachability & DNS |
+| `myip` / `portcheck <host> <port>` | Public IP & TCP port probe |
+| `httpcheck <url>` | HTTP status + latency |
 | `py print("hello")` | Run code |
 | `every 30m screenshot` | Scheduled tasks |
 | `help` | Show all commands |
@@ -92,7 +95,7 @@ pybridge.ai/
 │   ├── config.json            # Configuration
 │   ├── channels/              # WhatsApp, iMessage handlers
 │   ├── engine/                # AI engine (session, runner, providers)
-│   └── plugins/               # 11 built-in plugins
+│   └── plugins/               # 12 built-in plugins (incl. network diagnostics)
 ├── control-panel/             # Web GUI dashboard
 │   ├── server.py              # Python HTTP server + API
 │   └── static/index.html      # Frontend

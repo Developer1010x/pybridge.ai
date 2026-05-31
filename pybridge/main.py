@@ -56,6 +56,7 @@ from plugins import clipboard
 from plugins import browser
 from plugins import packages
 from plugins import vscode
+from plugins import network
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -499,6 +500,13 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
             "  cpu / mem / disk             system resources\n"
             "  ports                        open ports\n"
             "  uptime / sys                 system overview\n\n"
+            "Network:\n"
+            "  ping <host>                  reachability + RTT\n"
+            "  dns <host>                   resolve hostname\n"
+            "  myip / localip               public / LAN IP\n"
+            "  portcheck <host> <port>      probe TCP port\n"
+            "  httpcheck <url>              HTTP status + latency\n"
+            "  netinfo                      network summary\n\n"
             "Docker:\n"
             "  docker ps / logs / restart   containers\n"
             "  docker stop/start/stats      container control\n"
@@ -656,6 +664,17 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
     # ── VS Code ────────────────────────────────────────────────────────────
     if lower.startswith("vscode") or lower.startswith("code "):
         return vscode.handle("vscode", text.split(None, 1)[1] if " " in text else ""), None
+
+    # ── Network diagnostics ──────────────────────────────────────────────────
+    NET_CMDS = (
+        "ping", "dns", "resolve", "nslookup", "myip", "publicip", "wanip",
+        "localip", "lanip", "portcheck", "port", "httpcheck", "httpstatus",
+        "netinfo", "network",
+    )
+    for nc in NET_CMDS:
+        if lower == nc or lower.startswith(nc + " "):
+            args = text[len(nc):].strip()
+            return network.handle(nc, args), None
 
     # ── OpenCode ───────────────────────────────────────────────────────────────
     if lower.startswith("opencode ") or lower.startswith("oc "):
