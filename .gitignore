@@ -41,3 +41,7 @@ sessions/
 # Temp files
 *.tmp
 *.temp
+config.json.tmp
+
+# Control panel access token (also lives in ~/.pybridge/panel_token)
+panel_token

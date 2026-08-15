@@ -45,6 +45,7 @@ import screen
 import meet
 from channels import whatsapp as wa_channel
 from channels import imessage as im_channel
+from channels import repl as repl_channel
 from plugins import git_github
 from plugins import log_watcher
 from plugins import process_monitor
@@ -74,7 +75,9 @@ OS = platform.system()
 
 # Load .env if present (secrets override config.json placeholders)
 _env_path = os.path.join(BASE_DIR, ".env")
-if os.path.exists(_env_path):
+# isfile, not exists: a missing bind-mount source makes Docker create a
+# DIRECTORY here, and open() on a directory raises IsADirectoryError.
+if os.path.isfile(_env_path):
     with open(_env_path) as _ef:
         for _line in _ef:
             _line = _line.strip()
@@ -218,18 +221,6 @@ def ask_ai_with_fallback(prompt: str, identity: str) -> tuple[str, str | None]:
 
 # ── Direct command mode (when LLM unavailable) ─────────────────────────────────
 
-ALLOWED_COMMANDS = {
-    "system": ["ps", "top", "htop", "uptime", "df", "du", "free", "hostname", "uname", "whoami", "date", "cal"],
-    "process": ["ps aux", "kill", "pkill", "pgrep", "top", "htop"],
-    "network": ["ipconfig", "ifconfig", "ping", "netstat", "ss", "curl", "wget", "hostname -I", "arp", "traceroute"],
-    "docker": ["docker ps", "docker ps -a", "docker images", "docker logs", "docker stats", "docker inspect"],
-    "git": ["git status", "git log --oneline -5", "git diff", "git branch -a", "git remote -v"],
-    "files": ["ls", "ls -la", "ls -lh", "pwd", "cat", "head", "tail", "wc", "find", "grep"],
-    "screen": ["screenshot", "ss", "record"],
-    "clipboard": ["clip", "paste", "copy"],
-    "meet": ["meet zoom", "meet google", "meet teams"],
-}
-
 DIRECT_COMMANDS = {
     "ps": "ps aux | head -20",
     "cpu": "top -bn1 | head -10",
@@ -353,12 +344,12 @@ def _start_facetime(args: str) -> str:
 
 def _start_whatsapp_call(args: str) -> str:
     """Start WhatsApp call"""
-    import subprocess
     number = args.replace("whatsapp call", "").replace("wa call", "").strip()
     if not number:
         return "Usage: whatsapp call <number>"
     try:
-        subprocess.run(["open", f"whatsapp://send?phone={number}"], check=True)
+        # meet.open_url picks open / start / xdg-open per platform.
+        meet.open_url(f"whatsapp://send?phone={number}")
         return f"Opening WhatsApp to call {number}..."
     except Exception as e:
         return f"Failed to start WhatsApp call: {e}"
@@ -381,6 +372,41 @@ def switch_model(target: str, extra: str = "") -> str:
     return f"Unknown model '{target}'. Available: {', '.join(models.keys())}"
 
 # ── Command Router ────────────────────────────────────────────────────────────
+
+# Words that are both command prefixes and ordinary English: "find me a good
+# restaurant" must reach the AI, "find *.py" must reach the file_ops plugin.
+# For these — and only these — the argument has to look like a command
+# argument (a path, a flag, a URL, a glob, a number) rather than prose.
+AMBIGUOUS_PREFIXES = {"read", "find", "open", "search", "tree", "get", "post", "go"}
+
+
+def _is_command_shaped(cmd: str, args: str) -> bool:
+    """True if `args` looks like arguments to `cmd` rather than English prose."""
+    args = args.strip()
+
+    if cmd in ("get", "post"):
+        return args.startswith(("http://", "https://"))
+
+    if cmd == "go":
+        return args.startswith("run") or "package main" in args or "fmt." in args
+
+    tokens = args.split()
+    if len(tokens) <= 1:
+        return True     # "tree", "read main.py", "search TODO"
+
+    def arg_like(tok: str) -> bool:
+        return (tok.startswith("-")          # a flag
+                or "/" in tok or "\\" in tok  # a path
+                or "*" in tok or "?" in tok   # a glob
+                or "." in tok                 # a filename
+                or tok.isdigit())             # a line count
+    return all(arg_like(t) for t in tokens)
+
+
+def _route_prefix(cmd: str, args: str) -> bool:
+    """Should `cmd <args>` be routed to a plugin instead of the AI?"""
+    return cmd not in AMBIGUOUS_PREFIXES or _is_command_shaped(cmd, args)
+
 
 def handle_command(text: str, identity: str) -> tuple[str, str | None]:
     """
@@ -439,7 +465,8 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
         return screen.stop_stream(), None
 
     # ── Meeting ────────────────────────────────────────────────────────────
-    if lower.startswith("meet"):
+    # "meet google", not "meeting notes".
+    if lower == "meet" or lower.startswith("meet "):
         args = text[4:].strip()
         return meet.handle_meet(args, CONFIG.get("meeting", {})), None
 
@@ -458,7 +485,9 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
         _session_mgr.clear(identity)
         return "Conversation history cleared. Fresh start.", None
 
-    if lower in ("status", "ping"):
+    # "ping" alone is documented as network reachability, so it is NOT an alias
+    # for status — it falls through to the network plugin below.
+    if lower in ("status", "pybridge status"):
         sessions = _session_mgr.list_sessions()
         cfg = CONFIG["models"].get(current_model, {})
         return (
@@ -609,14 +638,16 @@ def handle_command(text: str, identity: str) -> tuple[str, str | None]:
     for cc in CODE_CMDS:
         if lower.startswith(cc + " "):
             args = text[len(cc):].strip()
-            return code_runner.handle(cc, args), None
+            if _route_prefix(cc, args):
+                return code_runner.handle(cc, args), None
 
     # ── File operations ────────────────────────────────────────────────────
     FILE_CMDS = ("read", "search", "grep", "find", "locate", "open", "tree", "wc", "wordcount")
     for fc in FILE_CMDS:
         if lower == fc or lower.startswith(fc + " "):
             args = text[len(fc):].strip()
-            return file_ops.handle(fc, args), None
+            if _route_prefix(fc, args):
+                return file_ops.handle(fc, args), None
 
     # ── Scheduler ──────────────────────────────────────────────────────────
     if lower.startswith("every "):
@@ -855,11 +886,59 @@ def telegram_loop():
 
     asyncio.run(run())
 
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
+USAGE = """PyBridge — secure AI remote control daemon
+
+  python main.py                 run the enabled channels from config.json
+  python main.py --repl          also open a local REPL on this terminal
+  python main.py --exec "<cmd>"  route one command, print the reply, exit
+  python main.py --help          this message
+
+The REPL and --exec go through the identical command router the phone
+channels use, so you can exercise the whole daemon with no credentials.
+"""
+
+
+def _parse_args(argv: list[str]) -> dict:
+    opts = {"repl": False, "exec": None}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("-h", "--help"):
+            print(USAGE)
+            sys.exit(0)
+        elif arg == "--repl":
+            opts["repl"] = True
+        elif arg in ("--exec", "-c"):
+            if i + 1 >= len(argv):
+                print("--exec needs a command, e.g. --exec \"git status\"")
+                sys.exit(2)
+            opts["exec"] = argv[i + 1]
+            i += 1
+        else:
+            print(f"Unknown option: {arg}\n")
+            print(USAGE)
+            sys.exit(2)
+        i += 1
+    return opts
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    ARGS = _parse_args(sys.argv[1:])
+
     wa_cfg = CONFIG.get("whatsapp", {})
     im_cfg = CONFIG.get("imessage", {})
+
+    # --exec is meant to be scripted: reply on stdout, nothing else.
+    if ARGS["exec"] is not None:
+        reply, path = handle_command(ARGS["exec"], repl_channel.IDENTITY)
+        print(reply)
+        if path:
+            print(f"attachment: {path}")
+        sys.exit(0)
 
     print("=" * 56)
     print("  PyBridge — Secure AI Remote Control")
@@ -870,6 +949,7 @@ if __name__ == "__main__":
     print(f"  Telegram      : {CONFIG['telegram']['enabled']}")
     print(f"  WhatsApp      : {wa_cfg.get('enabled', False)}")
     print(f"  iMessage      : {im_cfg.get('enabled', False)}{' (macOS only)' if OS != 'Darwin' else ''}")
+    print(f"  REPL          : {ARGS['repl']}")
     print(f"  Security      : rate-limit + injection-block + auth")
     print("=" * 56)
 
@@ -923,8 +1003,23 @@ if __name__ == "__main__":
             t.start()
             threads.append(t)
 
+    if ARGS["repl"]:
+        # The REPL owns the main thread; the phone channels (if any) keep
+        # running behind it.
+        if threads:
+            print(f"\n{len(threads)} phone channel(s) running in the background.")
+        try:
+            repl_channel.repl_loop(CONFIG, handle_command, current_model)
+        finally:
+            screen.stop_stream()
+        sys.exit(0)
+
     if not threads:
-        print("\nNo channels enabled. Edit config.json and set at least one channel to enabled: true")
+        print(
+            "\nNo channels enabled.\n"
+            "  · enable one in config.json (or in the control panel), or\n"
+            "  · try it right here:  python main.py --repl"
+        )
         sys.exit(1)
 
     print("\nRunning. Waiting for messages from your phone...\n")

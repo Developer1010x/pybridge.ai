@@ -132,6 +132,11 @@ def run_direct(config: dict, sessions: SessionManager,
             try:
                 messages  = list(history)
                 final_txt = ""
+                # tools=None: the direct path has no tool registry yet, so this
+                # loop always completes on the first pass. providers.py already
+                # serialises tool definitions and parses tool_calls back — what
+                # is missing is a bridge from PyBridge's plugins to a JSON
+                # schema, and appending tool results to `messages` below.
                 for _ in range(MAX_TOOL_LOOPS):
                     resp = _call(config, candidate, messages, system, None)
                     _merge_usage(usage, resp["usage"])

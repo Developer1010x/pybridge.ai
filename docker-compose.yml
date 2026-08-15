@@ -1,17 +1,20 @@
-version: "3.8"
-
 services:
   pybridge:
     build: .
     container_name: pybridge
     restart: unless-stopped
 
+    # Published on loopback only. The panel is token-authenticated, but it can
+    # also add phone numbers to the command allowlist, so do not expose it to
+    # the LAN without putting a TLS reverse proxy in front of it.
     ports:
-      - "9090:9090"     # Control Panel
-      - "8765:8765"     # Screen live-stream (optional)
+      - "127.0.0.1:9090:9090"     # Control Panel
+      - "127.0.0.1:8765:8765"     # Screen live-stream (optional)
 
     volumes:
-      # Config — edit these on your host, changes apply on restart
+      # Config — edit these on your host, changes apply on restart.
+      # Run `cp pybridge/.env.example pybridge/.env` BEFORE the first `up`:
+      # if the file is missing Docker creates a directory in its place.
       - ./pybridge/config.json:/app/pybridge/config.json
       - ./pybridge/.env:/app/pybridge/.env
 
@@ -22,6 +25,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYBRIDGE_SESSIONS_DIR=/data/sessions
+
+      # Control panel access token. Leave it unset and the panel generates one
+      # and prints it in `docker compose logs pybridge`.
+      # - PANEL_TOKEN=pick-a-long-random-string
 
       # Pass API keys here OR in pybridge/.env (either works)
       # Uncomment and fill in:

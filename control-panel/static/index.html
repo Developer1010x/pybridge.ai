@@ -473,23 +473,36 @@ HMAC_SECRET=your-random-secret</pre>
     </div>
 
     <div class="card" style="margin-bottom:16px;">
-      <div class="card-title" style="margin-bottom:12px;">3. Enable a Channel</div>
+      <div class="card-title" style="margin-bottom:12px;">3. Try it without a phone</div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:12px;">
+        The REPL channel feeds your keyboard through the exact same router the
+        phone channels use — no QR scan, no API key, no credentials.
+      </p>
+      <pre class="code-block"><span class="prompt">$</span> python main.py --repl
+<span class="comment"># or run one command and exit</span>
+<span class="prompt">$</span> python main.py --exec "git status"</pre>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:12px;">4. Enable a Channel</div>
       <p style="font-size:13px;color:var(--text-dim);line-height:1.6;">
-        Go to <a href="#" onclick="navigateTo('channels')">Channels</a> and enable at least one:<br><br>
-        <strong style="color:var(--text);">WhatsApp</strong> — Scan QR code (easiest, enabled by default)<br>
-        <strong style="color:var(--text);">Telegram</strong> — Create bot via @BotFather<br>
+        Go to <a href="#channels">Channels</a> and enable at least one,
+        then add yourself under <a href="#contacts">Contacts</a>:<br><br>
+        <strong style="color:var(--text);">WhatsApp</strong> — scan a QR code once (needs Node.js)<br>
+        <strong style="color:var(--text);">Telegram</strong> — create a bot via @BotFather<br>
         <strong style="color:var(--text);">Email</strong> — Gmail + App Password<br>
         <strong style="color:var(--text);">iMessage</strong> — macOS only, grant Full Disk Access to Terminal
       </p>
     </div>
 
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px;">4. Run</div>
+      <div class="card-title" style="margin-bottom:12px;">5. Run the daemon</div>
       <pre class="code-block"><span class="prompt">$</span> python main.py
-<span class="comment"># or</span>
-<span class="prompt">$</span> ./start.sh</pre>
+<span class="comment"># the control panel is a separate process</span>
+<span class="prompt">$</span> python ../control-panel/server.py</pre>
       <p style="font-size:13px;color:var(--text-dim);margin-top:12px;">
-        Send messages from your phone and PyBridge will reply via AI.
+        Send messages from your phone and PyBridge will reply via AI. Only the
+        contacts on the allowlist are answered; everything else is dropped.
       </p>
     </div>
   </section>
@@ -557,6 +570,20 @@ HMAC_SECRET=your-random-secret</pre>
           <tr><td style="color:var(--accent);font-family:monospace;">crons / cancel &lt;id&gt;</td><td>Manage scheduled tasks</td></tr>
         </table>
       </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">Try them without a phone</div>
+        <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:12px;">
+          The REPL channel feeds your keyboard through the same router, so every
+          command on this page can be tested locally first.
+        </p>
+        <pre class="code-block"><span class="prompt">$</span> python main.py --repl
+<span class="prompt">pybridge&gt;</span> <span class="cmd">sql SELECT 1+1</span>
+2
+<span class="prompt">pybridge&gt;</span> <span class="cmd">ping 1.1.1.1</span>
+64 bytes from 1.1.1.1: time=8.31 ms
+<span class="comment"># or one-shot</span>
+<span class="prompt">$</span> python main.py --exec "git status"</pre>
+      </div>
     </div>
   </section>
 
@@ -568,20 +595,34 @@ HMAC_SECRET=your-random-secret</pre>
 let config = {};
 let injectionPatterns = [];
 
-// Navigation
+// Navigation — every page is deep-linkable as #dashboard, #plugins, #commands…
+const PAGES = [...document.querySelectorAll('.nav-item')].map(n => n.dataset.page);
+
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => navigateTo(item.dataset.page));
+  item.addEventListener('click', () => { location.hash = item.dataset.page; });
 });
+
 function navigateTo(page) {
+  if (!PAGES.includes(page)) page = 'dashboard';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`)?.classList.add('active');
+  window.scrollTo(0, 0);
 }
+
+function navigateToHash() {
+  navigateTo((location.hash || '#dashboard').slice(1));
+}
+window.addEventListener('hashchange', navigateToHash);
 
 // API
 async function api(path, opts) {
-  try { return await (await fetch(path, opts)).json(); }
+  try {
+    const res = await fetch(path, opts);
+    if (res.status === 401) { location.href = '/'; return null; }
+    return await res.json();
+  }
   catch (e) { console.error(`API ${path}:`, e); return null; }
 }
 function toast(msg, type = 'success') {
@@ -669,7 +710,8 @@ function renderChannelsSummary(cfg) {
     return `<tr><td>${ch.name}</td><td>${enabled
       ? '<span class="badge enabled">Enabled</span>'
       : '<span class="badge disabled">Disabled</span>'}</td></tr>`;
-  }).join('');
+  }).join('') +
+  `<tr><td>Local REPL</td><td><span class="badge">On demand</span></td></tr>`;
 }
 
 function renderModelsSummary(cfg) {
@@ -687,7 +729,10 @@ function renderChannelsPage(cfg) {
     { key: 'email', name: 'Email (Gmail)', icon: '\u2709\uFE0F', color: '#f87171',
       details: () => `IMAP: ${cfg.email?.imap_host||'N/A'} \u00B7 Check every ${cfg.email?.check_interval_seconds||15}s` },
     { key: 'telegram', name: 'Telegram', icon: '\u2708\uFE0F', color: '#38bdf8',
-      details: () => `Bot token: ${cfg.telegram?.bot_token ? 'Configured' : 'Not set'}` },
+      details: () => {
+        const t = cfg.telegram?.bot_token || '';
+        return `Bot token: ${t && !t.startsWith('YOUR_') ? 'Configured' : 'Not set'}`;
+      } },
     { key: 'whatsapp', name: 'WhatsApp', icon: '\uD83D\uDCAC', color: '#4ade80',
       details: () => `Bridge port: ${cfg.whatsapp?.bridge_port||8766}` },
     { key: 'imessage', name: 'iMessage', icon: '\uD83D\uDCF1', color: '#6c8cff',
@@ -708,7 +753,17 @@ function renderChannelsPage(cfg) {
         <span class="slider"></span>
       </label>
     </div>`;
-  }).join('');
+  }).join('') +
+  `<div class="card channel-card">
+     <div class="channel-info">
+       <div class="channel-icon" style="background:#a78bfa22;color:#a78bfa;font-size:20px;">⌨️</div>
+       <div>
+         <div class="channel-name">Local REPL</div>
+         <div class="channel-detail">python main.py --repl · same router, no credentials</div>
+       </div>
+     </div>
+     <span class="badge" style="white-space:nowrap;">On demand</span>
+   </div>`;
 }
 
 function renderModelsPage(cfg) {
@@ -870,7 +925,12 @@ async function refreshHealth() {
   if (health) renderHealth(health);
 }
 
-// Init
+// Init — the server turned ?token=… into a session cookie, so drop it from
+// the address bar (and from any screenshot of this page).
+if (new URLSearchParams(location.search).has('token')) {
+  history.replaceState({}, '', location.pathname + location.hash);
+}
+navigateToHash();
 loadAll();
 </script>
 </body>

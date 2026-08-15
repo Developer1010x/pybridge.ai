@@ -11,7 +11,11 @@ import logging
 import subprocess
 import shutil
 import threading
-import requests
+
+try:
+    import requests
+except ImportError:          # only this channel needs it — the rest is stdlib
+    requests = None
 
 log = logging.getLogger("pybridge.whatsapp")
 
@@ -157,6 +161,11 @@ def whatsapp_loop(config: dict, handle_command_fn, bridge_dir: str):
     Polls bridge for incoming messages, routes through handle_command_fn,
     sends reply back.
     """
+    if requests is None:
+        log.error("[whatsapp] The 'requests' package is required for this channel: "
+                  "pip install -r requirements.txt")
+        return
+
     wa_cfg = config.get("whatsapp", {})
     port = wa_cfg.get("bridge_port", 8766)
     interval = wa_cfg.get("check_interval_seconds", 3)
