@@ -1,7 +1,7 @@
 # pybridge.ai
 
 **Text your laptop and it does things.** Send a message from WhatsApp, Telegram,
-Email or iMessage — PyBridge checks it came from you, routes it through a
+Email or iMessage, PyBridge checks it came from you, routes it through a
 12-plugin command router or an LLM, and replies with the answer, a screenshot
 or a screen recording.
 
@@ -9,7 +9,7 @@ or a screen recording.
 Phone (allowlisted contacts only)
   │ WhatsApp / Telegram / Email / iMessage / local REPL
   ▼
-PyBridge — security gate → command router → 12 plugins
+PyBridge, security gate → command router → 12 plugins
   │                                       ↘ falls through to the AI engine
   ├── Anthropic · OpenAI · Gemini · Groq · Mistral   (API key)
   ├── Ollama                                          (local, free, no key)
@@ -18,10 +18,10 @@ PyBridge — security gate → command router → 12 plugins
 ```
 
 Runs on **Linux, macOS and Windows**. The daemon, the router and the control
-panel are **pure standard library** — `pip install` is only needed for optional
+panel are **pure standard library**, `pip install` is only needed for optional
 extras like the Telegram channel or the browser plugin.
 
-## Try it in 20 seconds — no phone, no API key
+## Try it in 20 seconds, no phone, no API key
 
 ```bash
 git clone https://github.com/Developer1010x/pybridge.ai.git
@@ -60,8 +60,8 @@ Zero dependencies, single HTML file. Dashboard with live service status and a
 config health check, plus pages for channels, contacts, models, security and
 the full phone-command reference.
 
-The panel can edit the contact allowlist — i.e. it decides who is allowed to
-run shell commands on this machine — so it is **token-authenticated and bound
+The panel can edit the contact allowlist, i.e. it decides who is allowed to
+run shell commands on this machine, so it is **token-authenticated and bound
 to `127.0.0.1`** by default. The token is generated on first run and stored in
 `~/.pybridge/panel_token`; pin it with `PANEL_TOKEN=…`.
 
@@ -82,7 +82,7 @@ Compose publishes the panel on `127.0.0.1:9090` only.
 
 ```bash
 cd pybridge
-pip install -r requirements.txt   # optional — see the comments in that file
+pip install -r requirements.txt   # optional, see the comments in that file
 python main.py                    # runs the channels enabled in config.json
 ```
 
@@ -92,21 +92,21 @@ anything.
 
 ## Features
 
-**5 channels** — WhatsApp, Telegram, Email (Gmail), iMessage (macOS), local REPL
+**5 channels**, WhatsApp, Telegram, Email (Gmail), iMessage (macOS), local REPL
 
-**7 AI providers** — Anthropic, OpenAI, Gemini, Groq, Mistral, Ollama, OpenCode.
+**7 AI providers**, Anthropic, OpenAI, Gemini, Groq, Mistral, Ollama, OpenCode.
 All written against `urllib` directly, with an ordered fallback chain,
 exponential backoff with jitter, error classification and per-model cooldowns
 (`pybridge/engine/_direct.py`). The Anthropic Agent SDK is used when installed.
 
-**12 plugins** — git/GitHub, Docker, code runner (Python/Node/Bash/Go/Ruby/SQL/HTTP),
+**12 plugins**, git/GitHub, Docker, code runner (Python/Node/Bash/Go/Ruby/SQL/HTTP),
 file ops, process monitor, network diagnostics, scheduler, log watcher, browser
 automation, clipboard, VS Code, package audits
 
-**Security** — per-channel contact allowlists, prompt-injection detection, rate
+**Security**, per-channel contact allowlists, prompt-injection detection, rate
 limiting, message sanitization, token-authenticated control panel
 
-**Screen tools** — screenshot, screen recording, live MJPEG stream, meeting
+**Screen tools**, screenshot, screen recording, live MJPEG stream, meeting
 launcher (Zoom / Google Meet / Teams)
 
 ## Phone Commands
@@ -127,7 +127,7 @@ launcher (Zoom / Google Meet / Teams)
 
 Anything else is forwarded to the AI. Words that are both commands and English
 (`find`, `read`, `open`, `search`, `get`, `go`) only reach a plugin when the
-argument looks like an argument — `find *.py` greps, `find me a good restaurant`
+argument looks like an argument, `find *.py` greps, `find me a good restaurant`
 goes to the model.
 
 ## Tests
@@ -184,13 +184,13 @@ Panel-only variables: `PANEL_TOKEN`, `PANEL_HOST`, `PANEL_PORT`,
 
 - `run <cmd>` executes arbitrary shell as the daemon user, and the Agent SDK
   path runs with `permission_mode="bypassPermissions"`. That is the product.
-  **The contact allowlist is the security boundary** — treat it like an SSH key.
+  **The contact allowlist is the security boundary**, treat it like an SSH key.
 - The control panel requires a token and listens on loopback. Do not publish it
   to a LAN without a TLS reverse proxy in front.
 - The WhatsApp bridge listens on `127.0.0.1:8766` and is not authenticated;
   anything local that can reach that port can inject messages.
 - `security.sign_message` / `verify_signature` implement HMAC-SHA256 but no
-  shipped channel calls them — they are scaffolding for a future webhook
+  shipped channel calls them, they are scaffolding for a future webhook
   transport, not an active protection.
 
 ## License
