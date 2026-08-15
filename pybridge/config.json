@@ -1,5 +1,5 @@
 {
-  "default_model": "opencode",
+  "default_model": "ollama",
 
   "models": {
     "claude": {
@@ -40,7 +40,7 @@
     }
   },
 
-  "fallback_chain": ["opencode", "claude", "codex", "ollama"],
+  "fallback_chain": ["ollama", "claude", "codex"],
 
   "sessions_dir": "~/.pybridge/sessions",
 
@@ -82,7 +82,7 @@
   },
 
   "whatsapp": {
-    "enabled": true,
+    "enabled": false,
     "bridge_port": 8766,
     "check_interval_seconds": 3,
     "allowed_numbers": []

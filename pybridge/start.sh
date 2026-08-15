@@ -8,4 +8,5 @@ PYTHON=$(which python3.11 2>/dev/null || which python3)
 echo "Using Python: $PYTHON ($($PYTHON --version))"
 
 echo "Starting PyBridge..."
-$PYTHON main.py
+# Pass through any flags, e.g. ./start.sh --repl
+$PYTHON main.py "$@"

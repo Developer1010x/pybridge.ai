@@ -15,6 +15,8 @@ import time
 import socket
 import platform
 import subprocess
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 try:
@@ -42,27 +44,39 @@ def load_config():
 
 def get_status():
     status = {"pybridge": "stopped", "opencode": "stopped", "whatsapp": "stopped"}
-    
+    cfg = load_config()
+
     try:
         if OS == "Windows":
-            out = subprocess.check_output(["tasklist"], stderr=subprocess.DEVNULL, text=True)
-            if "python" in out.lower():
-                status["pybridge"] = "running"
+            # tasklist cannot show arguments, so ask CIM for the command line —
+            # otherwise ANY python.exe would look like a running PyBridge.
+            ps = ("Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" "
+                  "| Where-Object { $_.CommandLine -like '*pybridge*main.py*' } "
+                  "| Select-Object -First 1 -ExpandProperty ProcessId")
+            out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                                 capture_output=True, text=True, timeout=10).stdout
         else:
-            out = subprocess.check_output(["pgrep", "-f", "main.py"], stderr=subprocess.DEVNULL, text=True)
-            if out.strip():
-                status["pybridge"] = "running"
-    except:
+            out = subprocess.run(["pgrep", "-f", "pybridge.*main.py"],
+                                 capture_output=True, text=True, timeout=10).stdout
+        if out.strip():
+            status["pybridge"] = "running"
+    except Exception:
         pass
-    
+
+    opencode_url = cfg.get("models", {}).get("opencode", {}).get(
+        "base_url", "http://localhost:54321")
     try:
-        req = urllib.request.Request("http://localhost:54321/health")
+        req = urllib.request.Request(opencode_url.rstrip("/") + "/health")
         with urllib.request.urlopen(req, timeout=2) as resp:
             if resp.status == 200:
                 status["opencode"] = "running"
-    except:
+    except Exception:
         pass
-    
+
+    bridge_port = int(cfg.get("whatsapp", {}).get("bridge_port", 8766))
+    if check_port(bridge_port):
+        status["whatsapp"] = "running"
+
     return status
 
 def check_port(port):
@@ -111,15 +125,37 @@ def stop_pybridge():
         _pybridge_process.terminate()
         _pybridge_process = None
 
+def panel_token() -> str:
+    """The control panel's access token, so the tray can deep-link into it."""
+    env = os.environ.get("PANEL_TOKEN", "").strip()
+    if env:
+        return env
+    token_file = Path(os.environ.get("PANEL_TOKEN_FILE")
+                      or (Path.home() / ".pybridge" / "panel_token"))
+    try:
+        return token_file.read_text().strip()
+    except OSError:
+        return ""
+
 def open_control_panel():
-    import webbrowser
-    webbrowser.open("http://localhost:9090")
+    from urllib.parse import quote
+    token = panel_token()
+    url = "http://localhost:9090/"
+    if token:
+        url += "?token=" + quote(token)
+    webbrowser.open(url)
+
+def open_folder(path: Path):
+    """Open a folder in the OS file manager, cross-platform."""
+    if OS == "Windows":
+        os.startfile(path)
+    elif OS == "Darwin":
+        subprocess.run(["open", str(path)])
+    else:
+        subprocess.run(["xdg-open", str(path)])
 
 def open_config_folder():
-    if OS == "Windows":
-        os.startfile(BASE_DIR / "pybridge")
-    else:
-        subprocess.run(["open", str(BASE_DIR / "pybridge")])
+    open_folder(BASE_DIR / "pybridge")
 
 def stop_app(icon):
     global _running
@@ -140,6 +176,7 @@ def get_menu(icon):
         Item("PyBridge", lambda: None, enabled=False),
         Item(status_text("pybridge"), lambda: None, enabled=False),
         Item(status_text("opencode"), lambda: None, enabled=False),
+        Item(status_text("whatsapp"), lambda: None, enabled=False),
         Item("---", lambda: None, enabled=False),
         Item("Open Control Panel", lambda _: open_control_panel()),
         Item("Open Config Folder", lambda _: open_config_folder()),

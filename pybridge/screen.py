@@ -11,6 +11,7 @@ import shutil
 import socket
 import platform
 import tempfile
+import uuid
 import subprocess
 import threading
 
@@ -19,11 +20,21 @@ OS = platform.system()
 _stream_process = None
 _stream_server = None
 
+
+def _temp_path(suffix: str) -> str:
+    """Unique path in the system temp dir.
+
+    The file is deliberately NOT created: screencapture / scrot / ffmpeg all
+    want to create it themselves, and some refuse to overwrite.
+    """
+    return os.path.join(tempfile.gettempdir(), f"pybridge-{uuid.uuid4().hex}{suffix}")
+
+
 # ── Screenshot ────────────────────────────────────────────────────────────────
 
 def take_screenshot() -> str:
     """Take a screenshot and return the temp file path."""
-    path = tempfile.mktemp(suffix=".png")
+    path = _temp_path(".png")
 
     if OS == "Darwin":
         subprocess.run(["screencapture", "-x", path], check=True)
@@ -87,7 +98,7 @@ def record_screen(seconds: int = 10) -> tuple[str | None, str | None]:
         }
         return None, f"ffmpeg not found. Install: {hints.get(OS, 'ffmpeg')}"
 
-    path = tempfile.mktemp(suffix=".mp4")
+    path = _temp_path(".mp4")
     cmd = [
         "ffmpeg", "-y", "-framerate", "15",
         *_ffmpeg_input_args(),
@@ -115,7 +126,7 @@ def start_stream(port: int = 8765) -> str:
     if not shutil.which("ffmpeg"):
         return "ffmpeg not found. Install ffmpeg first."
 
-    jpeg_path = tempfile.mktemp(suffix=".jpg")
+    jpeg_path = _temp_path(".jpg")
 
     # ffmpeg writes latest frame continuously to same jpeg file
     ffmpeg_cmd = [
@@ -193,10 +204,11 @@ def stop_stream() -> str:
 
 def take_region_screenshot(x: int, y: int, w: int, h: int) -> str:
     """Take a screenshot of a specific region"""
-    path = tempfile.mktemp(suffix=".png")
-    
+    path = _temp_path(".png")
+
     if OS == "Darwin":
-        subprocess.run(["screencapture", "-x", "-r", f"-i{0},{1},{2},{3}".format(x, y, w, h), path], check=True)
+        # -R x,y,w,h captures a region non-interactively.
+        subprocess.run(["screencapture", "-x", "-R", f"{x},{y},{w},{h}", path], check=True)
     elif OS == "Windows":
         ps = (
             f"Add-Type -AssemblyName System.Windows.Forms,System.Drawing;"
@@ -213,17 +225,17 @@ def take_region_screenshot(x: int, y: int, w: int, h: int) -> str:
 
 def take_window_screenshot(window_name: str = "") -> str:
     """Take screenshot of a specific window"""
-    path = tempfile.mktemp(suffix=".png")
-    
+    path = _temp_path(".png")
+
     if OS == "Darwin":
         if window_name:
             subprocess.run(["screencapture", "-x", "-W", f'"{window_name}"', path], check=True)
         else:
             subprocess.run(["screencapture", "-x", "-i", path], check=True)
     elif OS == "Windows":
-        ps = f"Add-Type -AssemblyName System.Windows.Forms,System.Drawing;[System.Windows.Forms.Screen]::PrimaryScreen"
-        subprocess.run(["powershell", "-Command", ps], check=True)
-        subprocess.run(["screencapture", "-x", path], check=True)
+        # No per-window capture on Windows without extra deps — grab the screen.
+        from PIL import ImageGrab
+        ImageGrab.grab().save(path)
     else:
         subprocess.run(["import", "-window", window_name or "root", path], check=True)
     return path
@@ -253,7 +265,7 @@ def record_gif(seconds: int = 5, fps: int = 10) -> tuple[str | None, str | None]
     if not shutil.which("ffmpeg"):
         return None, "ffmpeg not found. Install ffmpeg first."
     
-    path = tempfile.mktemp(suffix=".gif")
+    path = _temp_path(".gif")
     cmd = [
         "ffmpeg", "-y", "-framerate", str(fps),
         *_ffmpeg_input_args(),

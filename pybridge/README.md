@@ -15,29 +15,42 @@ PyBridge — security gate + channel handler
 
 ## Setup
 
+The daemon, the router, the REPL, the control panel and the git / docker /
+code / file / network plugins run on the **standard library alone**. Everything
+in `requirements.txt` is optional and annotated with the feature that needs it.
+
 ```bash
 cd pybridge
-pip install -r requirements.txt
+pip install -r requirements.txt     # optional extras
 ```
 
 Edit `config.json` (or create a `.env` file) with:
-- API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
+- API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) — or run Ollama locally and need none
 - Channel credentials (see below)
 
 ## Run
 
 ```bash
-python main.py
+python main.py --repl               # local REPL: no phone, no keys, no QR scan
+python main.py --exec "git status"  # route one command and exit
+python main.py                      # the channels enabled in config.json
 ```
+
+`--repl` and `--exec` go through the identical router the phone channels use,
+so anything you can text the daemon you can type here first.
 
 ## Control Panel (GUI)
 
 A web-based dashboard is available to manage config, channels, models, and security:
 
 ```bash
-python control-panel/server.py
-# Open http://127.0.0.1:9090
+python ../control-panel/server.py
+# prints:  Open: http://127.0.0.1:9090/?token=<generated token>
 ```
+
+The panel is a **separate process** — `main.py` does not start it. It is
+token-authenticated and bound to `127.0.0.1` by default; the token is
+generated on first run and kept in `~/.pybridge/panel_token`.
 
 ## Channels
 
@@ -54,9 +67,13 @@ python control-panel/server.py
 4. Set `telegram.enabled: true`
 
 ### WhatsApp
-1. Set `whatsapp.enabled: true` (default)
-2. Run PyBridge — a QR code window will appear
+1. Set `whatsapp.enabled: true` (all channels ship disabled)
+2. Run PyBridge — the Node bridge installs itself and shows a QR code
 3. Scan with WhatsApp → Settings → Linked Devices → Link a Device
+4. Add your number to `whatsapp.allowed_numbers`
+
+Requires Node.js 18+. Auth is stored in `whatsapp_bridge/.wwebjs_auth`, or in
+`$WHATSAPP_AUTH_DIR` when set (Docker points it at a named volume).
 
 ### iMessage (macOS only)
 1. Grant "Full Disk Access" to Terminal in System Settings
@@ -100,6 +117,7 @@ WHATSAPP_NUMBER=+1234567890
 | `watch <logfile>` | Log watching + alerts |
 | `browse <url>` | Screenshot a URL |
 | `clip` / `copy <text>` | Clipboard |
+| `ping <host>` / `dns <host>` | Network diagnostics |
 | `run <cmd>` | Any terminal command |
 | `clear` | Reset conversation |
 | `help` | Show all commands |
@@ -110,9 +128,27 @@ WHATSAPP_NUMBER=+1234567890
 - **Prompt injection detection** — blocks known injection patterns
 - **Rate limiting** — configurable per-minute limit (default 20)
 - **Message sanitization** — strips control characters, enforces max length
-- **HMAC signing** — optional message integrity verification
+- **Control panel auth** — token required, loopback-bound by default
 - **TLS** — all external communications encrypted
+
+Know what this is: `run <cmd>` executes arbitrary shell as the user running
+the daemon, and that is the point of the project. The allowlist of contacts is
+the security boundary — keep it to yourself, and do not expose the panel or
+the bridge port to a network you do not control.
+
+`security.sign_message` / `verify_signature` implement HMAC-SHA256 for signing
+webhook payloads. No shipped channel calls them yet — they are there for a
+future webhook transport, not an active protection.
 
 ## Plugins
 
-PyBridge ships with 11 plugins: `git_github`, `code_runner`, `file_ops`, `docker_mgr`, `process_monitor`, `scheduler`, `log_watcher`, `browser`, `clipboard`, `packages`, `vscode`.
+PyBridge ships with 12 plugins: `git_github`, `code_runner`, `file_ops`,
+`docker_mgr`, `process_monitor`, `network`, `scheduler`, `log_watcher`,
+`browser`, `clipboard`, `packages`, `vscode`.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s ../tests -v   # hermetic: no network, no side effects
+python3 test_run.py                           # live smoke test against this machine
+```

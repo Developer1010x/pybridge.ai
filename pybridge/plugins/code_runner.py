@@ -108,8 +108,8 @@ def run_go(code: str) -> str:
 
 
 def run_sql(query: str) -> str:
-    sqlite = shutil.which("sqlite3")
-    if not sqlite:
+    sqlite_bin = shutil.which("sqlite3")
+    if not sqlite_bin:
         # Try via Python's built-in sqlite3
         try:
             import sqlite3
@@ -121,7 +121,7 @@ def run_sql(query: str) -> str:
             return "\n".join(str(r) for r in rows[:100])
         except Exception as e:
             return f"SQL error: {e}"
-    return _run_code([sqlite3, ":memory:", query])
+    return _run_code([sqlite_bin, ":memory:", query])
 
 
 def run_http(method: str, url: str, body: str = "") -> str:

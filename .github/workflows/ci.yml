@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Byte-compile every module
+        run: python -m compileall -q pybridge control-panel tests pybridge_tray.py
+
+      - name: Unit tests (no network, no side effects)
+        run: python -m unittest discover -s tests -v
+
+      - name: Control panel boots and serves
+        run: |
+          PANEL_TOKEN=ci-token python control-panel/server.py 9099 &
+          PANEL_PID=$!
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:9099/healthz && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:9099/healthz | grep -q '"status": "ok"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9099/api/config)" = "401"
+          curl -sf -H "Authorization: Bearer ci-token" http://127.0.0.1:9099/api/config > /dev/null
+          # SIGTERM must be enough — the handler used to deadlock on serve_forever()
+          kill -TERM "$PANEL_PID"
+          for i in $(seq 1 20); do
+            kill -0 "$PANEL_PID" 2>/dev/null || break
+            sleep 0.5
+          done
+          ! kill -0 "$PANEL_PID" 2>/dev/null
+
+      - name: Router answers without any credentials
+        run: |
+          cd pybridge
+          python main.py --exec "help"   | grep -q "PyBridge on"
+          python main.py --exec "status" | grep -q "PyBridge status"
+          printf 'sql SELECT 1+1\nexit\n' | python main.py --repl | grep -q "^2$"
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Syntax-check the WhatsApp bridge
+        run: node --check pybridge/whatsapp_bridge/server.js

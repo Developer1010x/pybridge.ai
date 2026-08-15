@@ -29,16 +29,42 @@ const ALLOWED_NUMBERS = (WA_CFG.allowed_numbers || []).map((n) =>
 );
 const PORT = WA_CFG.bridge_port || 8766;
 
+// Auth lives wherever WHATSAPP_AUTH_DIR points (Docker mounts a named volume
+// there); otherwise next to this file. Without this the session would be
+// written into the image layer and lost on every container recreate.
+const AUTH_DIR = process.env.WHATSAPP_AUTH_DIR || path.join(__dirname, ".wwebjs_auth");
+fs.mkdirSync(AUTH_DIR, { recursive: true });
+console.log(`[whatsapp] Auth directory: ${AUTH_DIR}`);
+
 // ── Message Queue ─────────────────────────────────────────────────────────────
 
 const pendingMessages = [];
 let isReady = false;
 let currentQR = null;
 
+// Ids of messages this bridge sent itself. WhatsApp echoes them back through
+// message_create with fromMe=true, and without this they would be re-queued as
+// new commands — an infinite self-reply loop.
+const sentIds = new Set();
+
+function rememberSent(sent) {
+  const id = sent && sent.id && sent.id._serialized;
+  if (!id) return;
+  sentIds.add(id);
+  // Bound the set; ids are only needed for the moment the echo arrives.
+  if (sentIds.size > 500) {
+    sentIds.delete(sentIds.values().next().value);
+  }
+}
+
+// A reply produced by PyBridge: "[ollama] …", "[claude] …", "Blocked: …",
+// or the "$ <cmd>" echo from `run`. Belt and braces for ids lost on restart.
+const BOT_REPLY_RE = /^(\[[A-Za-z0-9_.:+-]{1,32}\]|Blocked:|\$ )/;
+
 // ── WhatsApp Client ───────────────────────────────────────────────────────────
 
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: path.join(__dirname, ".wwebjs_auth") }),
+  authStrategy: new LocalAuth({ dataPath: AUTH_DIR }),
   webVersion: "2.3000.1017054429-alpha",
   webVersionCache: {
     type: "remote",
@@ -87,8 +113,11 @@ function handleMsg(msg) {
   let senderNum, replyTo;
 
   if (msg.fromMe) {
-    // Ignore our own bot replies to avoid feedback loop
-    if (msg.body && msg.body.startsWith("[claude]")) return;
+    // Ignore our own bot replies to avoid a feedback loop: first by message id
+    // (exact), then by reply shape (survives a bridge restart).
+    const id = msg.id && msg.id._serialized;
+    if (id && sentIds.has(id)) return;
+    if (msg.body && BOT_REPLY_RE.test(msg.body)) return;
     // Message sent FROM the user's own phone.
     // Accept if: sent to a @lid (linked device = note-to-self), OR starts with "/"
     const toLinkedDevice = msg.to && msg.to.endsWith("@lid");
@@ -151,7 +180,7 @@ app.post("/send", async (req, res) => {
     const chatId = (to.includes("@c.us") || to.includes("@lid") || to.includes("@g.us"))
       ? to
       : to.replace(/[^0-9]/g, "") + "@c.us";
-    await client.sendMessage(chatId, message);
+    rememberSent(await client.sendMessage(chatId, message));
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -170,7 +199,7 @@ app.post("/send-image", async (req, res) => {
     const chatId = (to.includes("@c.us") || to.includes("@lid") || to.includes("@g.us"))
       ? to
       : to.replace(/[^0-9]/g, "") + "@c.us";
-    await client.sendMessage(chatId, media, { caption });
+    rememberSent(await client.sendMessage(chatId, media, { caption }));
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -189,7 +218,7 @@ app.post("/send-video", async (req, res) => {
     const chatId = (to.includes("@c.us") || to.includes("@lid") || to.includes("@g.us"))
       ? to
       : to.replace(/[^0-9]/g, "") + "@c.us";
-    await client.sendMessage(chatId, media, { caption });
+    rememberSent(await client.sendMessage(chatId, media, { caption }));
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
