@@ -1,5 +1,7 @@
 # pybridge.ai
 
+[![CI](https://github.com/Developer1010x/pybridge.ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Developer1010x/pybridge.ai/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-2EA44F)](LICENSE) ![Python: 3](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white) ![Docker: ready](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+
 **Text your laptop and it does things.** Send a message from WhatsApp, Telegram,
 Email or iMessage, PyBridge checks it came from you, routes it through a
 12-plugin command router or an LLM, and replies with the answer, a screenshot
@@ -196,3 +198,7 @@ Panel-only variables: `PANEL_TOKEN`, `PANEL_HOST`, `PANEL_PORT`,
 ## License
 
 [MIT](LICENSE)
+
+---
+
+Built by **S. Prajwall Narayana** · [Portfolio](https://sprajwallnarayana.vercel.app) · [GitHub](https://github.com/Developer1010x)
